@@ -1,4 +1,5 @@
 # Supabase: baza (migratsiyalar + narxlar), Edge Functions, maxfiy sozlamalar, Telegram webhook.
+# Deploy: har push da avtomatik
 #
 # Repo Secrets (Settings → Secrets and variables → Actions → Secrets):
 #   SUPABASE_ACCESS_TOKEN   Supabase → Account → Access Tokens
