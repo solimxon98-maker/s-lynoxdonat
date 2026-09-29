@@ -7,7 +7,7 @@ const TOKEN = "123456:TEST_TOKEN";
 const env: Record<string, string> = {
   SLD_TEST: "1", MOCK_MODE: "true", SESSION_SECRET: "x".repeat(40), TELEGRAM_BOT_TOKEN: TOKEN,
   TELEGRAM_WEBHOOK_SECRET: "whsecret_1234567890", CRON_SECRET: "cronsecret_123", ADMIN_TELEGRAM_IDS: "999",
-  TELEGRAM_BOT_USERNAME: "SLynoxTestBot", WEBAPP_URL: "https://example.github.io/s-lynoxdonat", SUPPORT_USERNAME: "Solim_9804",
+  TELEGRAM_BOT_USERNAME: "SLynoxTestBot", WEBAPP_URL: "https://example.github.io/s-lynoxdonat", SUPPORT_USERNAME: "Solim_9804", PLAYER_CHECK: "mock",
 };
 for (const [k, v] of Object.entries(env)) Deno.env.set(k, v);
 

@@ -60,7 +60,11 @@ export const config = {
   },
   fastdonate: {
     get apiUrl() {
-      return str("FASTDONATE_API_URL");
+      return str("FASTDONATE_API_URL", "https://api.fastdonate.su");
+    },
+    /** "real" — nik FastDonate orqali tekshiriladi (test rejimda ham); "mock" — soxta (faqat avtotestlar) */
+    get playerCheck() {
+      return str("PLAYER_CHECK", "real").toLowerCase();
     },
     get apiKey() {
       return str("FASTDONATE_API_KEY");

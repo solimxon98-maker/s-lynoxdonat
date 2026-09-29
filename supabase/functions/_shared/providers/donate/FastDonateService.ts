@@ -10,6 +10,7 @@ import {
   ProviderError,
   ProviderOrderResult,
 } from "./types.ts";
+import { checkPlayerViaFastDonate } from "./playerCheck.ts";
 
 /**
  * FastDonateService — fastdonate.su bilan HAQIQIY integratsiya (MOCK_MODE=false).
@@ -37,12 +38,8 @@ export class FastDonateService implements DonateProvider {
   // Public API
   // ------------------------------------------------------------------
 
-  async checkPlayer(_input: CheckPlayerInput): Promise<CheckPlayerResult> {
-    await this.credentials();
-    // INTEGRATSIYA NUQTASI: player verification endpointi.
-    // Agar FastDonate verification qo'llamasa, quyidagini qaytaring:
-    //   return { found: true, nickname: null, verificationSupported: false };
-    throw this.notImplemented("checkPlayer");
+  async checkPlayer(input: CheckPlayerInput): Promise<CheckPlayerResult> {
+    return await checkPlayerViaFastDonate(input.mlbbId, input.serverId);
   }
 
   async createOrder(_input: CreateOrderInput): Promise<ProviderOrderResult> {

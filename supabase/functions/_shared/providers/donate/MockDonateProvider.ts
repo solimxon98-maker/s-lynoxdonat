@@ -1,3 +1,5 @@
+import { config } from "../../config.ts";
+import { checkPlayerViaFastDonate } from "./playerCheck.ts";
 import {
   BalanceResult,
   CheckPlayerInput,
@@ -26,7 +28,9 @@ export class MockDonateProvider implements DonateProvider {
 
   private static readonly COMPLETE_AFTER_MS = 5000;
 
-  async checkPlayer({ mlbbId }: CheckPlayerInput): Promise<CheckPlayerResult> {
+  async checkPlayer({ mlbbId, serverId }: CheckPlayerInput): Promise<CheckPlayerResult> {
+    // Test rejimda ham nik haqiqiy tekshiriladi (FastDonate, login shart emas)
+    if (config.fastdonate.playerCheck === "real") return await checkPlayerViaFastDonate(mlbbId, serverId);
     await delay(400);
     if (/^0+$/.test(mlbbId)) {
       return { found: false, nickname: null, verificationSupported: true };
