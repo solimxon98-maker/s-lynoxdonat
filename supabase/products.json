@@ -1,0 +1,23 @@
+[
+  {"name": "50+50 Bonus", "category": "bonus", "oncePerAccount": true, "diamonds": 50, "bonus": 50, "price": 11000, "sortOrder": 10, "priceBronze": 10500, "priceVip": 10000},
+  {"name": "150+150 Bonus", "category": "bonus", "oncePerAccount": true, "diamonds": 150, "bonus": 150, "price": 32000, "sortOrder": 20, "priceBronze": 31000, "priceVip": 30000},
+  {"name": "250+250 Bonus", "category": "bonus", "oncePerAccount": true, "diamonds": 250, "bonus": 250, "price": 50000, "sortOrder": 30, "priceBronze": 49000, "priceVip": 48000},
+  {"name": "500+500 Bonus", "category": "bonus", "oncePerAccount": true, "diamonds": 500, "bonus": 500, "price": 105000, "sortOrder": 40, "priceBronze": 102000, "priceVip": 99000},
+  {"name": "55 Diamonds", "category": "diamonds", "diamonds": 55, "price": 11000, "sortOrder": 110, "priceBronze": 10500, "priceVip": 10000},
+  {"name": "86 Diamonds", "category": "diamonds", "diamonds": 86, "price": 17000, "sortOrder": 120, "priceBronze": 16500, "priceVip": 16000},
+  {"name": "172 Diamonds", "category": "diamonds", "diamonds": 172, "price": 32500, "sortOrder": 130, "priceBronze": 31500, "priceVip": 31000},
+  {"name": "257 Diamonds", "category": "diamonds", "diamonds": 257, "price": 47500, "sortOrder": 140, "priceBronze": 46500, "priceVip": 46000},
+  {"name": "275 Diamonds", "category": "diamonds", "diamonds": 275, "price": 50000, "sortOrder": 150, "priceBronze": 49000, "priceVip": 48000},
+  {"name": "344 Diamonds", "category": "diamonds", "diamonds": 344, "price": 65000, "sortOrder": 160, "priceBronze": 63000, "priceVip": 62000},
+  {"name": "565 Diamonds", "category": "diamonds", "diamonds": 565, "price": 105000, "sortOrder": 170, "priceBronze": 102000, "priceVip": 99000},
+  {"name": "706 Diamonds", "category": "diamonds", "diamonds": 706, "price": 123000, "sortOrder": 180, "priceBronze": 122000, "priceVip": 121000},
+  {"name": "1412 Diamonds", "category": "diamonds", "diamonds": 1412, "price": 246000, "sortOrder": 190, "priceBronze": 244000, "priceVip": 242000},
+  {"name": "2195 Diamonds", "category": "diamonds", "diamonds": 2195, "price": 370000, "sortOrder": 200, "priceBronze": 368000, "priceVip": 366000},
+  {"name": "3688 Diamonds", "category": "diamonds", "diamonds": 3688, "price": 613000, "sortOrder": 210, "priceBronze": 610000, "priceVip": 608000},
+  {"name": "4390 Diamonds", "category": "diamonds", "diamonds": 4390, "price": 733000, "sortOrder": 220, "priceBronze": 730000, "priceVip": 728000},
+  {"name": "5532 Diamonds", "category": "diamonds", "diamonds": 5532, "price": 930000, "sortOrder": 230, "priceBronze": 925000, "priceVip": 920000},
+  {"name": "9288 Diamonds", "category": "diamonds", "diamonds": 9288, "price": 1535000, "sortOrder": 240, "priceBronze": 1530000, "priceVip": 1520000},
+  {"name": "Haftalik Propusk", "category": "pass", "diamonds": 0, "price": 20000, "sortOrder": 310, "priceBronze": 19800, "priceVip": 19500},
+  {"name": "Haftalik Elitniy", "category": "pass", "diamonds": 0, "price": 12000, "sortOrder": 320, "priceBronze": 11500, "priceVip": 10500},
+  {"name": "Oylik Epicheskiy", "category": "pass", "diamonds": 0, "price": 54000, "sortOrder": 330, "priceBronze": 53000, "priceVip": 52000}
+]

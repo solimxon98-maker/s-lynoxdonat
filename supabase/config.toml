@@ -1,0 +1,15 @@
+# Supabase CLI sozlamalari (supabase functions deploy / db push)
+project_id = "s-lynoxdonat"
+
+[functions.api]
+verify_jwt = false   # o'z sessiya tokenimiz va admin JWT funksiya ichida tekshiriladi
+
+[functions.telegram-bot]
+verify_jwt = false   # Telegram secret_token bilan tekshiriladi
+
+[functions.cron]
+verify_jwt = false   # x-cron-secret bilan tekshiriladi
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-demo/
+.env
+.env.*
+!.env.example
+*.local
+.secrets.env
+supabase/.temp/
+supabase/.branches/
+.DS_Store

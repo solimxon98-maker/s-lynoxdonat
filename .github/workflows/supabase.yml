@@ -1,0 +1,108 @@
+# Supabase: baza (migratsiyalar + narxlar), Edge Functions, maxfiy sozlamalar, Telegram webhook.
+#
+# Repo Secrets (Settings → Secrets and variables → Actions → Secrets):
+#   SUPABASE_ACCESS_TOKEN   Supabase → Account → Access Tokens
+#   SUPABASE_DB_PASSWORD    loyiha ochilganda berilgan baza paroli
+#   TELEGRAM_BOT_TOKEN      @BotFather tokeni
+#   APP_SECRET              istalgan uzun tasodifiy satr (40+ belgi) — sessiya/webhook/cron kalitlari shundan hosil qilinadi
+#   (keyin) FASTDONATE_API_URL / FASTDONATE_API_KEY / FASTDONATE_SECRET — yoki admin paneldan
+#
+# Repo Variables:
+#   SUPABASE_PROJECT_REF    masalan: abcdefghijklmnopqrst
+#   ADMIN_TELEGRAM_IDS      admin Telegram ID lari (vergul bilan)
+#   TELEGRAM_BOT_USERNAME   bot username (@ siz)
+#   SUPPORT_USERNAME        Solim_9804
+#   MOCK_MODE               true (test) / false (haqiqiy)
+#   LOW_BALANCE_THRESHOLD   ixtiyoriy
+name: Supabase (baza + server + bot)
+
+on:
+  push:
+    branches: [main]
+    paths: ["supabase/**", ".github/workflows/supabase.yml", "scripts/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: supabase
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      WEBAPP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+      ALLOWED_ORIGIN: https://${{ github.repository_owner }}.github.io
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tekshiruv
+        run: |
+          missing=""
+          for v in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF; do [ -z "${!v}" ] && missing="$missing $v"; done
+          [ -z "${{ secrets.APP_SECRET }}" ] && missing="$missing APP_SECRET"
+          if [ -n "$missing" ]; then echo "::error::Kiritilmagan:$missing"; exit 1; fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Kalitlarni hosil qilish (APP_SECRET dan)
+        run: |
+          derive() { printf '%s' "${{ secrets.APP_SECRET }}:$1" | sha256sum | cut -c1-48; }
+          echo "::add-mask::$(derive session)"; echo "::add-mask::$(derive webhook)"; echo "::add-mask::$(derive cron)"
+          echo "SESSION_SECRET=$(derive session)" >> "$GITHUB_ENV"
+          echo "TELEGRAM_WEBHOOK_SECRET=$(derive webhook)" >> "$GITHUB_ENV"
+          echo "CRON_SECRET=$(derive cron)" >> "$GITHUB_ENV"
+
+      - name: Loyihaga ulanish
+        run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Cron manzilini migratsiyaga yozish
+        run: |
+          sed -i "s#__CRON_URL__#https://$PROJECT_REF.supabase.co/functions/v1/cron#; s#__CRON_SECRET__#$CRON_SECRET#" \
+            supabase/migrations/20260929000003_cron_config.sql
+
+      - name: Baza (migratsiyalar + narxlar)
+        run: supabase db push --include-seed --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Maxfiy sozlamalar (Edge secrets)
+        run: |
+          cat > .secrets.env <<EOT
+          MOCK_MODE=${{ vars.MOCK_MODE || 'true' }}
+          SESSION_SECRET=$SESSION_SECRET
+          CRON_SECRET=$CRON_SECRET
+          ALLOWED_ORIGIN=$ALLOWED_ORIGIN
+          TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET=$TELEGRAM_WEBHOOK_SECRET
+          TELEGRAM_BOT_USERNAME=${{ vars.TELEGRAM_BOT_USERNAME }}
+          ADMIN_TELEGRAM_IDS=${{ vars.ADMIN_TELEGRAM_IDS }}
+          WEBAPP_URL=$WEBAPP_URL
+          SUPPORT_USERNAME=${{ vars.SUPPORT_USERNAME || 'Solim_9804' }}
+          PAYMENT_PROVIDER=${{ vars.PAYMENT_PROVIDER || 'mock' }}
+          LOW_BALANCE_THRESHOLD=${{ vars.LOW_BALANCE_THRESHOLD || '0' }}
+          FASTDONATE_API_URL=${{ secrets.FASTDONATE_API_URL }}
+          FASTDONATE_API_KEY=${{ secrets.FASTDONATE_API_KEY }}
+          FASTDONATE_SECRET=${{ secrets.FASTDONATE_SECRET }}
+          EOT
+          sed -i 's/^ *//' .secrets.env
+          supabase secrets set --env-file .secrets.env --project-ref "$PROJECT_REF"
+          rm -f .secrets.env
+
+      - name: Edge Functions
+        run: supabase functions deploy --project-ref "$PROJECT_REF"
+
+      - name: Telegram bot (webhook, menyu, buyruqlar)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WEBHOOK_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/telegram-bot
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ]; then echo "::warning::TELEGRAM_BOT_TOKEN yo'q — bot sozlanmadi"; exit 0; fi
+          bash scripts/setup-bot.sh
+
+      - name: Tekshiruv — API ishlayaptimi
+        run: |
+          sleep 5
+          curl -fsS "https://$PROJECT_REF.supabase.co/functions/v1/api/health" && echo

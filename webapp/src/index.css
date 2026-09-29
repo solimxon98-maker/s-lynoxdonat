@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Telegram safe area (Bot API 8.0+) + iOS notch */
+  --safe-top: max(env(safe-area-inset-top, 0px), calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px)));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px)));
+  --nav-h: 68px;
+  color-scheme: dark;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    background: #04050d;
+  }
+  body {
+    @apply font-sans text-slate-100 antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  input,
+  button,
+  select,
+  textarea {
+    font: inherit;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  ::selection {
+    background: rgba(46, 230, 255, 0.3);
+  }
+}
+
+@layer components {
+  .app-bg {
+    background:
+      radial-gradient(900px 500px at 110% -10%, rgba(139, 92, 246, 0.22), transparent 60%),
+      radial-gradient(700px 480px at -20% 10%, rgba(46, 230, 255, 0.14), transparent 60%),
+      radial-gradient(800px 600px at 50% 120%, rgba(177, 77, 255, 0.12), transparent 60%),
+      #04050d;
+    background-attachment: fixed;
+  }
+
+  .grid-overlay {
+    background-image:
+      linear-gradient(rgba(46, 230, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(46, 230, 255, 0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse at top, black 20%, transparent 70%);
+  }
+
+  .card {
+    @apply relative rounded-3xl border border-white/[0.07] bg-ink-850/70 shadow-card backdrop-blur-xl;
+  }
+
+  .card-glow {
+    @apply card;
+    background:
+      linear-gradient(#0a0e24cc, #0a0e24cc) padding-box,
+      linear-gradient(135deg, rgba(46, 230, 255, 0.55), rgba(139, 92, 246, 0.25) 45%, rgba(177, 77, 255, 0.55)) border-box;
+    border: 1px solid transparent;
+  }
+
+  .text-gradient {
+    background: linear-gradient(100deg, #2ee6ff 0%, #7aa8ff 40%, #b14dff 80%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-2xl px-5 py-3.5 font-bold transition duration-200 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn text-white shadow-glow;
+    background: linear-gradient(100deg, #1fb6ff 0%, #6a5cff 50%, #b14dff 100%);
+    background-size: 200% 100%;
+    animation: shimmer 6s linear infinite;
+  }
+
+  .btn-ghost {
+    @apply btn border border-white/10 bg-white/[0.04] text-slate-200 hover:bg-white/[0.08];
+  }
+
+  .btn-danger {
+    @apply btn border border-rose-400/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20;
+  }
+
+  .input {
+    @apply w-full rounded-2xl border border-white/10 bg-ink-950/70 px-4 py-3.5 text-base text-white placeholder:text-slate-500 outline-none transition focus:border-neon-blue/60 focus:shadow-glow-sm;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold;
+  }
+
+  .safe-top {
+    padding-top: calc(var(--safe-top) + 12px);
+  }
+
+  .safe-bottom-nav {
+    padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 20px);
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

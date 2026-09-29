@@ -1,0 +1,55 @@
+# Web App + Admin panel -> GitHub Pages
+# Kerakli repo Variables (Settings → Secrets and variables → Actions → Variables):
+#   SUPABASE_PROJECT_REF, SUPABASE_ANON_KEY  (ikkalasi ham ommaviy)
+name: Web App (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+    paths: ["webapp/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+      - run: npm ci
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          VITE_BASE: /${{ github.event.repository.name }}/
+        run: |
+          test -n "${{ vars.SUPABASE_PROJECT_REF }}" || (echo "::error::SUPABASE_PROJECT_REF variable kiritilmagan" && exit 1)
+          npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: webapp/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
