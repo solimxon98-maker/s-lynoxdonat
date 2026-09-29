@@ -82,7 +82,7 @@ jobs:
           ADMIN_TELEGRAM_IDS=${{ vars.ADMIN_TELEGRAM_IDS || '6040509902' }}
           WEBAPP_URL=$WEBAPP_URL
           SUPPORT_USERNAME=${{ vars.SUPPORT_USERNAME || 'Solim_9804' }}
-          PAYMENT_PROVIDER=${{ vars.PAYMENT_PROVIDER || 'mock' }}
+          PAYMENT_PROVIDER=${{ vars.PAYMENT_PROVIDER || 'balance' }}
           LOW_BALANCE_THRESHOLD=${{ vars.LOW_BALANCE_THRESHOLD || '0' }}
           FASTDONATE_API_URL=${{ secrets.FASTDONATE_API_URL }}
           FASTDONATE_API_KEY=${{ secrets.FASTDONATE_API_KEY }}

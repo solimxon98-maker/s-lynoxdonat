@@ -77,6 +77,25 @@ export function AdminUsersPage() {
     }
   }
 
+  async function changeBalance(u: UserRecord) {
+    const label = u.username ? `@${u.username}` : u.firstName;
+    const raw = window.prompt(`${label} balansi: ${formatSum(u.balance ?? 0)}\n\nQancha qo‘shish kerak? (ayirish uchun minus: -5000)`, "");
+    if (raw === null) return;
+    const delta = Number(raw.replace(/[\s,]/g, ""));
+    if (!Number.isInteger(delta) || delta === 0) return void window.alert("Butun son kiriting, masalan 10000 yoki -5000");
+    const note = window.prompt("Sabab (izoh) — mijozga ham ko‘rsatiladi:", delta > 0 ? "Bonus" : "Tuzatish");
+    if (!note?.trim()) return;
+    setBusy(u.id);
+    try {
+      const r = await api<{ balance: number }>(`/admin/users/${encodeURIComponent(u.id)}/balance`, { body: { delta, note }, admin: true });
+      setUsers((list) => list?.map((x) => (x.id === u.id ? { ...x, balance: r.balance } : x)) ?? null);
+    } catch (e) {
+      window.alert(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function toggleBlock(u: UserRecord) {
     const next = !u.blocked;
     const label = u.username ? `@${u.username}` : u.firstName;
@@ -125,12 +144,13 @@ export function AdminUsersPage() {
 
       {filtered && filtered.length > 0 && (
         <div className="card overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-sm">
+          <table className="w-full min-w-[1220px] text-sm">
             <thead>
               <tr className="border-b border-white/5 text-left text-xs uppercase tracking-wider text-slate-500">
                 <th className="px-4 py-3">Telegram ID</th>
                 <th className="px-4 py-3">Username</th>
                 <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Balans</th>
                 <th className="px-4 py-3">Tarif</th>
                 <th className="px-4 py-3">Do‘stlar</th>
                 <th className="px-4 py-3">Orders</th>
@@ -146,6 +166,12 @@ export function AdminUsersPage() {
                   <td className="px-4 py-3 font-mono text-xs">{u.telegramId}</td>
                   <td className="px-4 py-3 text-white">{u.username ? `@${u.username}` : "—"}</td>
                   <td className="px-4 py-3">{[u.firstName, u.lastName].filter(Boolean).join(" ") || "—"}</td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <b className="text-emerald-300">{formatSum(u.balance ?? 0)}</b>
+                    <button className="mt-1 block rounded-lg border border-white/10 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/5" disabled={busy === u.id} onClick={() => changeBalance(u)}>
+                      ± Balans
+                    </button>
+                  </td>
                   <td className="px-4 py-3">
                     {(() => {
                       const t = activeTier(u.tier, u.tierUntil);

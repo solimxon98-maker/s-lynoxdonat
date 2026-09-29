@@ -25,6 +25,12 @@ const CODE_STATUS: Record<string, number> = {
   ONCE_PER_ACCOUNT: 409,
   INVALID_TIER: 400,
   INVALID_DAYS: 400,
+  INVALID_AMOUNT: 400,
+  TOO_MANY_TOPUPS: 429,
+  TOPUP_CLOSED: 409,
+  ORDER_CLOSED: 409,
+  INSUFFICIENT_FUNDS: 402,
+  REFUND_NOT_ALLOWED: 409,
 };
 
 /** SQL funksiyani chaqiradi. "KOD: matn" ko'rinishidagi xatolarni HttpError ga aylantiradi. */

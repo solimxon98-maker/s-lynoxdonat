@@ -42,7 +42,8 @@ export function OrderDetailPage() {
   if (!order) return <FullScreenLoader />;
 
   const currentIdx = FLOW.indexOf(order.status);
-  const failed = order.status === "FAILED";
+  const failed = order.status === "FAILED" || order.status === "REFUNDED";
+  const refunded = order.status === "REFUNDED";
   const cancelled = order.status === "CANCELLED";
 
   return (
@@ -76,6 +77,12 @@ export function OrderDetailPage() {
               <span className="text-sm font-semibold text-rose-300">Donat xatosi</span>
             </li>
           )}
+          {refunded && (
+            <li className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-500/15 text-sm ring-1 ring-sky-400/50">↩️</span>
+              <span className="text-sm font-semibold text-sky-300">Pul balansga qaytarildi</span>
+            </li>
+          )}
           {cancelled && (
             <li className="flex items-center gap-3">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-sm ring-1 ring-white/10">🚫</span>
@@ -85,7 +92,10 @@ export function OrderDetailPage() {
         </ol>
       </div>
 
-      {failed && (
+      {refunded && (
+        <Alert tone="sky">↩️ {formatSum(order.amount)} balansingizga qaytarildi. Uni boshqa xarid uchun ishlatishingiz mumkin.</Alert>
+      )}
+      {failed && !refunded && (
         <Alert>
           <p className="font-semibold">❌ Buyurtmani bajarishda vaqtinchalik xatolik yuz berdi.</p>
           <p className="mt-1">Buyurtma ID: #{order.orderNo}</p>
@@ -110,7 +120,7 @@ export function OrderDetailPage() {
         </button>
       )}
 
-      {(failed || order.status === "PROCESSING") && supportUsername && (
+      {((failed && !refunded) || order.status === "PROCESSING") && supportUsername && (
         <button className="btn-ghost w-full" onClick={() => openExternal(`https://t.me/${supportUsername}`)}>
           <MessageCircle size={18} /> Supportga yozish
         </button>

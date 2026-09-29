@@ -16,6 +16,7 @@ await db.exec(`
   grant usage on schema public to anon, authenticated, service_role;
 `);
 try { await db.exec(fs.readFileSync(`${R}/migrations/20260929000001_init.sql`, "utf8")); } catch (e) { console.error("MIGRATION ERROR:", e.message, "pos", e.position, e.hint ?? ""); const s = fs.readFileSync(`${R}/migrations/20260929000001_init.sql`, "utf8"); if (e.position) console.error(s.slice(Math.max(0, +e.position - 200), +e.position + 100)); process.exit(1); }
+try { await db.exec(fs.readFileSync(`${R}/migrations/20260929000004_wallet.sql`, "utf8")); } catch (e) { console.error("WALLET MIGRATION ERROR:", e.message); process.exit(1); }
 await db.exec(`grant all on all tables in schema public to service_role; grant all on all sequences in schema public to service_role; grant execute on all functions in schema public to service_role;`);
 await db.exec(fs.readFileSync(`${R}/seed.sql`, "utf8"));
 ok((await one("select count(*)::int c from products")).c === 21, "21 ta paket yuklandi");
@@ -96,6 +97,54 @@ ok((await one("select referred_by from tg_users where id=1003")).referred_by == 
 await db.query("update orders set created_at = now() - interval '25 hours' where status='AWAITING_PAYMENT'");
 ok((await one("select expire_unpaid_orders() r")).r > 0, "24 soatlik to'lanmaganlar bekor qilindi");
 
+
+// ---- BALANS ----
+await db.query("insert into payment_cards(bank, number, holder) values ('humo','9860123412341234','SOLIM X'),('uzcard','8600123412341234','SOLIM X')");
+const card = (await one("select id from payment_cards where bank='humo'")).id;
+await db.query("select * from upsert_tg_user(700,'w','Wallet',null,null,null)");
+ok(/INVALID_AMOUNT/.test(await err("select create_topup(700, 500, $1, 'tk0')", [card])), "to'ldirish: 1000 dan kam summa rad");
+let tp = (await one("select create_topup(700, 50000, $1, 'tk1') r", [card])).r;
+ok(tp.topup_no === "TP-000001" && tp.status === "AWAITING_RECEIPT" && tp.card.number === "9860123412341234", "to'ldirish so'rovi TP-000001, karta snapshot");
+ok((await one("select create_topup(700, 50000, $1, 'tk1') r", [card])).r.reused === true, "to'ldirish: qayta bosish — yangi so'rov yo'q");
+ok(/TOPUP_CLOSED/.test(await err("select attach_topup_receipt('TP-000001', 111, 'F')")), "boshqa odam chek biriktira olmaydi");
+ok((await one("select attach_topup_receipt('TP-000001', 700, 'FILE1') r")).r.status === "PENDING", "chek biriktirildi -> PENDING");
+let ap = (await one("select approve_topup('TP-000001', 48000, 'admin:tg:999') r")).r;
+ok(ap.result === "approved" && Number(ap.balance) === 48000 && ap.topup.credited === 48000, "admin tasdiqladi (haqiqiy summa 48 000) -> balans 48 000");
+ok((await one("select approve_topup('TP-000001', null, 'x') r")).r.result === "already_decided", "ikkinchi marta tasdiqlash balansni oshirmaydi");
+ok(Number((await one("select balance from tg_users where id=700")).balance) === 48000, "balans 48 000 (ikki marta qo'shilmadi)");
+tp = (await one("select create_topup(700, 20000, $1, 'tk2') r", [card])).r;
+ok((await one("select reject_topup($1, 'Pul tushmadi', 'a') r", [tp.topup_no])).r.topup.status === "REJECTED", "rad etildi");
+ok(Number((await one("select balance from tg_users where id=700")).balance) === 48000, "rad etilganda balans o'zgarmaydi");
+for (const k of ["a1", "a2", "a3"]) await db.query("select create_topup(700, 10000, $1, $2)", [card, k]);
+ok(/TOO_MANY_TOPUPS/.test(await err("select create_topup(700, 10000, $1, 'a4')", [card])), "3 tadan ortiq ochiq so'rov yo'q");
+await db.query("update topups set created_at = now() - interval '4 hours' where status='AWAITING_RECEIPT'");
+ok((await one("select expire_topups() r")).r === 3, "chek yuborilmagan so'rovlar 3 soatda yopildi");
+
+const buy = (key) => one("select create_order(700, $1, '777777777', '1', 'N', $2, 'balance', 'fastdonate-mock', true) r", [p86, key]);
+let ob = (await buy("b1")).r;
+let pr = (await one("select pay_order_from_balance($1, 700) r", [ob.order_no])).r;
+ok(pr.result === "paid" && Number(pr.balance) === 31000, "balansdan to'landi: 48 000 - 17 000 = 31 000");
+ok((await one("select status, payment_status from orders where order_no=$1", [ob.order_no])).status === "PAID", "buyurtma PAID");
+ok((await one("select pay_order_from_balance($1, 700) r", [ob.order_no])).r.result === "already_paid", "ikki marta yechilmaydi");
+ok(Number((await one("select balance from tg_users where id=700")).balance) === 31000, "balans 31 000 (ikki marta yechilmadi)");
+ok(/NOT_FOUND/.test(await err("select pay_order_from_balance($1, 111)", [ob.order_no])), "boshqa odamning buyurtmasini to'lay olmaydi");
+await db.query("select claim_paid_order($1)", [ob.order_no]);
+ok(/REFUND_NOT_ALLOWED/.test(await err("select refund_order_to_balance($1,'a')", [ob.order_no])), "PROCESSING buyurtmani qaytarib bo'lmaydi");
+await db.query("select fail_order($1,'ORDER_FAILED','x')", [ob.order_no]);
+let rf = (await one("select refund_order_to_balance($1,'a') r", [ob.order_no])).r;
+ok(rf.result === "refunded" && Number(rf.balance) === 48000, "FAILED -> balansga qaytarildi (48 000)");
+ok(/REFUND_NOT_ALLOWED/.test(await err("select refund_order_to_balance($1,'a')", [ob.order_no])), "ikkinchi marta qaytarilmaydi");
+ok((await one("select retry_order($1) r", [ob.order_no])).r === false, "qaytarilgan buyurtmani qayta yuborib bo'lmaydi");
+for (let i = 2; i <= 3; i++) await one("select pay_order_from_balance($1, 700) r", [(await buy("b" + i)).r.order_no]);
+ob = (await buy("b4")).r;
+pr = (await one("select pay_order_from_balance($1, 700) r", [ob.order_no])).r;
+ok(pr.result === "insufficient" && Number(pr.need) === 3000 && Number(pr.balance) === 14000, "balans yetmasa: yana 3 000 kerak, pul yechilmaydi");
+ok(/INSUFFICIENT_FUNDS/.test(await err("select admin_adjust_balance(700, -20000, 'xato', 'a')")), "balans manfiy bo'lmaydi");
+ok(Number((await one("select admin_adjust_balance(700, 3000, 'bonus', 'a') r")).r) === 17000, "admin +3 000 qo'shdi");
+ok((await one("select pay_order_from_balance($1, 700) r", [ob.order_no])).r.result === "paid", "endi to'landi");
+const txs = (await db.query("select kind, delta from balance_tx where user_id=700 order by id")).rows;
+ok(txs.length === 7 && txs.reduce((a, t) => a + Number(t.delta), 0) === 0, "jurnal: 7 ta yozuv, yig'indisi = joriy balans (0)");
+
 // ---- RLS ----
 await db.exec("set role anon");
 ok((await one("select count(*)::int c from products")).c === 21, "anon faol paketlarni ko'radi");
@@ -124,5 +173,16 @@ ok((await db.query("update tg_users set blocked=true where id=111")).affectedRow
 const st = (await one("select admin_stats(now() - interval '1 day') s")).s;
 ok(st.total > 0, `admin_stats: ${JSON.stringify(st)}`);
 ok(/permission denied/.test(await err("select set_user_tier(111,'vip',7)")), "admin set_user_tier ni to'g'ridan-to'g'ri chaqira olmaydi");
+ok(/permission denied/.test(await err("select approve_topup('TP-000001', 1, 'x')")), "admin approve_topup ni to'g'ridan-to'g'ri chaqira olmaydi");
+ok(/permission denied/.test(await err("update tg_users set balance=999999 where id=700")), "admin balansni SQL orqali o'zgartira olmaydi");
+ok((await db.query("select * from topups")).rows.length > 0, "admin to'ldirishlarni ko'radi");
+ok((await db.query("update payment_cards set active=false where bank='uzcard'")).affectedRows === 1, "admin kartani o'chira oladi");
+await db.exec("reset role");
+await db.exec("set role anon");
+ok(/permission denied/.test(await err("select * from payment_cards")), "anon kartalar jadvalini o'qiy olmaydi");
+ok(/permission denied/.test(await err("select pay_order_from_balance('SLD-000001', 700)")), "anon pay_order_from_balance chaqira olmaydi");
+await db.exec("reset role");
+await db.exec(`set test.uid = '${USER}'; set role authenticated`);
+ok((await db.query("select * from topups")).rows.length === 0, "admin bo'lmagan to'ldirishlarni ko'rmaydi");
 await db.exec("reset role");
 console.log("\nHAMMASI O'TDI");

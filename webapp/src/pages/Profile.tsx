@@ -1,5 +1,6 @@
 import { AtSign, CalendarDays, Hash, MessageCircle, Package, Wallet } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { InviteCard } from "../components/InviteCard";
 import { Logo } from "../components/Logo";
 import { PageHeader } from "../components/ui";
@@ -35,6 +36,16 @@ export function ProfilePage() {
           <p className="truncate text-sm text-slate-400">{profile.username ? `@${profile.username}` : "Username yo‘q"}</p>
         </div>
       </div>
+
+      <Link to="/wallet" className="card-glow flex items-center justify-between gap-3 px-4 py-4 animate-fade-up">
+        <span className="flex items-center gap-2 text-sm text-slate-300">
+          <Wallet size={18} className="text-neon-blue" /> Balans
+        </span>
+        <span className="text-right">
+          <b className="font-display text-lg text-gradient">{formatSum(profile.balance ?? 0)}</b>
+          <span className="block text-[11px] text-slate-500">To‘ldirish →</span>
+        </span>
+      </Link>
 
       <div className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 animate-fade-up ${TIER_META[profile.tier ?? "oddiy"].chip}`}>
         <span className="text-sm font-bold">

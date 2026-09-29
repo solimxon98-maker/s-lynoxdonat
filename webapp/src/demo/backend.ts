@@ -35,6 +35,8 @@ export function seedDemo() {
     });
   });
   demoDb.set("admins", ADMIN_UID, { email: "admin@demo", name: "Demo admin", disabled: false });
+  demoDb.set("cards", "c1", { bank: "humo", number: "9860123412341234", holder: "SOLIM X.", note: "", active: true, sortOrder: 1 });
+  demoDb.set("cards", "c2", { bank: "uzcard", number: "8600123412341234", holder: "SOLIM X.", note: "", active: true, sortOrder: 2 });
   demoDb.set("settings", "providerStatus", {
     connected: true,
     message: "MOCK rejim: ulanish simulyatsiya qilinmoqda",
@@ -99,6 +101,7 @@ function publicUser(u: any) {
     photoUrl: u.photoUrl ?? null, ordersCount: u.ordersCount ?? 0, successfulOrders: u.successfulOrders ?? 0,
     totalSpent: u.totalSpent ?? 0, createdAt: u.createdAt?.toMillis?.() ?? null,
     tier: t, tierUntil: t === "oddiy" ? null : u.tierUntil?.toMillis?.() ?? null,
+    balance: u.balance ?? 0,
   };
 }
 
@@ -283,7 +286,9 @@ on("POST", /^\/orders$/, async ({ uid, body }) => {
   const existing = demoDb.list("orders").find(([, o]) => o.uid === uid && o.idempotencyKey === key);
   if (existing) {
     const o = existing[1];
-    return { order: publicOrder(o), payment: { id: o.paymentId, mode: "in_app_mock", payUrl: `/pay/${o.paymentId}`, status: "PENDING" }, reused: true };
+    const res: any = { order: publicOrder(o), payment: { id: o.paymentId, mode: "balance", payUrl: `/pay/${o.paymentId}`, status: o.paymentStatus }, reused: true };
+    if (body?.payWithBalance) res.balancePay = o.paymentStatus === "PAID" ? { result: "already_paid", balance: user.balance ?? 0, need: 0 } : payFromBalance(uid!, o.orderNo);
+    return res;
   }
   const product = demoDb.get("products", String(body?.productId ?? ""));
   if (!product) throw new ApiErr(404, "NOT_FOUND", "Paket topilmadi.");
@@ -313,16 +318,21 @@ on("POST", /^\/orders$/, async ({ uid, body }) => {
     mlbbId, serverId, nickname: `MLBB_Player_${mlbbId.slice(-4)}`, productId: body.productId,
     product: { name: product.name, category: product.category, diamonds: product.diamonds, bonus: product.bonus, price: product.price, providerSku: null },
     amount, priceTier, currency: "UZS", status: "AWAITING_PAYMENT", paymentStatus: "PENDING", paymentId,
-    paymentProvider: "mock", donateProvider: "fastdonate-mock", providerOrderId: null, attempts: 0, lastError: null,
+    paymentProvider: "balance", donateProvider: "fastdonate-mock", providerOrderId: null, attempts: 0, lastError: null,
     idempotencyKey: key, mock: true, createdAt: now, updatedAt: now, paidAt: null, processingAt: null, completedAt: null,
   };
   demoDb.set("orders", orderNo, order);
   demoDb.set("payments", paymentId, {
-    orderId: orderNo, uid, provider: "mock", amount, currency: "UZS", status: "PENDING", mode: "in_app_mock",
+    orderId: orderNo, uid, provider: "balance", amount, currency: "UZS", status: "PENDING", mode: "balance",
     payUrl: `/pay/${paymentId}`, externalId: `MOCKPAY-${paymentId}`, createdAt: now, updatedAt: now, paidAt: null,
   });
   demoDb.update("users", uid!, { lastOrderAt: now });
-  return { order: publicOrder(order), payment: { id: paymentId, mode: "in_app_mock", payUrl: `/pay/${paymentId}`, status: "PENDING" }, reused: false };
+  const res: any = { order: publicOrder(order), payment: { id: paymentId, mode: "balance", payUrl: `/pay/${paymentId}`, status: "PENDING" }, reused: false };
+  if (body?.payWithBalance) {
+    res.balancePay = payFromBalance(uid!, orderNo);
+    res.order = publicOrder(demoDb.get("orders", orderNo));
+  }
+  return res;
 });
 
 on("GET", /^\/orders\/([A-Z]+-\d+)$/, async ({ uid, params }) => {
@@ -338,7 +348,8 @@ on("GET", /^\/payments\/([A-Za-z0-9]+)$/, async ({ uid, params }) => {
   if (!p || p.uid !== uid) throw new ApiErr(404, "NOT_FOUND", "To‘lov topilmadi");
   const o = demoDb.get("orders", p.orderId)!;
   return {
-    payment: { id: params[0], orderId: p.orderId, amount: p.amount, currency: "UZS", status: p.status, provider: "mock", mode: "in_app_mock", payUrl: p.payUrl },
+    payment: { id: params[0], orderId: p.orderId, amount: p.amount, currency: "UZS", status: p.status, provider: "balance", mode: "balance", payUrl: p.payUrl },
+    balance: demoDb.get("users", uid!)?.balance ?? 0,
     order: { orderNo: o.orderNo, nickname: o.nickname, mlbbId: o.mlbbId, serverId: o.serverId, name: o.product.name, category: o.product.category, diamonds: o.product.diamonds, bonus: o.product.bonus, status: o.status },
   };
 });
@@ -360,6 +371,130 @@ on("POST", /^\/payments\/([A-Za-z0-9]+)\/mock$/, async ({ uid, params, body }) =
     demoDb.update("orders", p.orderId, { status: "CANCELLED", paymentStatus: "CANCELLED", updatedAt: now });
   }
   return { result: "applied" };
+});
+
+// ---- balans ----
+function moveBalance(uid: string, delta: number, kind: string, ref: string | null, note: string | null) {
+  const u = demoDb.get("users", uid)!;
+  const next = (u.balance ?? 0) + delta;
+  if (next < 0) throw new ApiErr(402, "INSUFFICIENT_FUNDS", "Balans yetarli emas");
+  demoDb.update("users", uid, { balance: next });
+  demoDb.set("balanceTx", demoDb.newId(), { uid, delta, balanceAfter: next, kind, ref, note, createdAt: Timestamp.now() });
+  return next;
+}
+function payFromBalance(uid: string, orderNo: string) {
+  const o = demoDb.get("orders", orderNo);
+  if (!o || o.uid !== uid) throw new ApiErr(404, "NOT_FOUND", "Buyurtma topilmadi");
+  const u = demoDb.get("users", uid)!;
+  if (o.paymentStatus === "PAID") return { result: "already_paid", balance: u.balance ?? 0, need: 0 };
+  if (o.status !== "AWAITING_PAYMENT") throw new ApiErr(409, "ORDER_CLOSED", "Bu buyurtma yopilgan. Yangi buyurtma bering.");
+  if ((u.balance ?? 0) < o.amount) return { result: "insufficient", balance: u.balance ?? 0, need: o.amount - (u.balance ?? 0) };
+  const bal = moveBalance(uid, -o.amount, "purchase", orderNo, null);
+  const now = Timestamp.now();
+  demoDb.update("payments", o.paymentId, { status: "PAID", paidAt: now });
+  demoDb.update("orders", orderNo, { status: "PAID", paymentStatus: "PAID", paidAt: now, updatedAt: now });
+  demoDb.update("users", uid, { ordersCount: demoDb.increment(1) });
+  void fulfill(orderNo);
+  return { result: "paid", balance: bal, need: 0 };
+}
+const BANK: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
+const publicCard = (id: string, c: any) => ({ id, bank: c.bank, bankLabel: BANK[c.bank], number: c.number, holder: c.holder, note: c.note });
+function publicTopup(t: any) {
+  return {
+    topupNo: t.topupNo, amount: t.amount, credited: t.credited ?? null, status: t.status,
+    card: { ...t.card, bankLabel: BANK[t.card.bank] }, hasReceipt: !!t.receipt, rejectReason: t.rejectReason ?? null,
+    createdAt: t.createdAt.toMillis(), decidedAt: t.decidedAt?.toMillis?.() ?? null,
+  };
+}
+export function demoDecideTopup(no: string, ok: boolean, amount?: number, reason?: string) {
+  const t = demoDb.get("topups", no);
+  if (!t || !["PENDING", "AWAITING_RECEIPT"].includes(t.status)) throw new ApiErr(409, "ALREADY_DECIDED", "Bu so‘rov allaqachon ko‘rib chiqilgan");
+  if (ok) {
+    const credited = amount ?? t.amount;
+    const bal = moveBalance(t.uid, credited, "topup", no, null);
+    demoDb.update("topups", no, { status: "APPROVED", credited, decidedAt: Timestamp.now(), decidedBy: "admin:panel" });
+    chat.push({ chat: "user", from: "bot", html: `✅ <b>Hisobingiz to‘ldirildi!</b>\n\n🧾 #${no}\n💰 +${fmt(credited)}\n💼 Balans: <b>${fmt(bal)}</b>\n\n💎 Endi xohlagan olmos paketingizni balansdan sotib olishingiz mumkin!` });
+  } else {
+    const r = reason || "Pul kartaga tushmadi yoki chek noto‘g‘ri";
+    demoDb.update("topups", no, { status: "REJECTED", rejectReason: r, decidedAt: Timestamp.now(), decidedBy: "admin:panel" });
+    chat.push({ chat: "user", from: "bot", html: `❌ <b>To‘ldirish so‘rovi rad etildi</b>\n\n🧾 #${no} — ${fmt(t.amount)}\nSabab: ${esc(r)}` });
+  }
+}
+
+on("GET", /^\/wallet$/, async ({ uid }) => {
+  const u = requireUser(uid);
+  return {
+    balance: u.balance ?? 0,
+    cards: demoDb.list("cards").filter(([, c]) => c.active).sort((a, b) => a[1].sortOrder - b[1].sortOrder).map(([id, c]) => publicCard(id, c)),
+    topups: demoDb.list("topups").map(([, t]) => t).filter((t) => t.uid === uid).sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()).map(publicTopup),
+    transactions: demoDb.list("balanceTx").map(([id, x]): any => ({ ...x, id })).filter((x) => x.uid === uid)
+      .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+      .map((x) => ({ id: x.id, delta: x.delta, balanceAfter: x.balanceAfter, kind: x.kind, ref: x.ref, note: x.note, createdAt: x.createdAt.toMillis() })),
+  };
+});
+on("POST", /^\/topups$/, async ({ uid, body }) => {
+  requireUser(uid);
+  const amount = Number(body?.amount);
+  if (!Number.isInteger(amount) || amount < 1000) throw new ApiErr(400, "INVALID_AMOUNT", "Summa 1 000 dan 50 000 000 so‘mgacha bo‘lishi kerak");
+  const card = demoDb.get("cards", String(body?.cardId));
+  if (!card || !card.active) throw new ApiErr(404, "NOT_FOUND", "Karta topilmadi");
+  await sleep(400);
+  const c = demoDb.get("settings", "counters") ?? {};
+  const seq = (c.topupSeq ?? 0) + 1;
+  demoDb.set("settings", "counters", { ...c, topupSeq: seq });
+  const topupNo = `TP-${String(seq).padStart(6, "0")}`;
+  const t = { topupNo, uid, amount, status: "AWAITING_RECEIPT", card: { bank: card.bank, number: card.number, holder: card.holder }, createdAt: Timestamp.now() };
+  demoDb.set("topups", topupNo, t);
+  return { topup: publicTopup(t), reused: false };
+});
+on("POST", /^\/topups\/(TP-\d+)\/receipt$/, async ({ uid, params, body }) => {
+  const u = requireUser(uid);
+  const t = demoDb.get("topups", params[0]);
+  if (!t || t.uid !== uid) throw new ApiErr(404, "NOT_FOUND", "So‘rov topilmadi");
+  if (!/^data:image\//.test(String(body?.image ?? ""))) throw new ApiErr(400, "INVALID_IMAGE", "Chek rasmini yuklang (JPG yoki PNG).");
+  await sleep(700);
+  demoDb.update("topups", params[0], { status: "PENDING", receipt: body.image });
+  chat.push({
+    chat: "admin", from: "bot",
+    html: `🧾 <b>HISOBNI TO‘LDIRISH</b> #${params[0]}\n\n👤 @${esc(u.username)} (ID: <code>${esc(u.telegramId)}</code>)\n💰 Summa: <b>${fmt(t.amount)}</b>\n💳 Karta: ${BANK[t.card.bank]} •••• ${t.card.number.slice(-4)}\n\n⚠️ Tasdiqlashdan oldin <b>bank ilovangizda pul tushganini tekshiring</b>.\n\n<i>[chek rasmi] · Demo: admin panel → To‘ldirishlar</i>`,
+  });
+  return { topup: publicTopup(demoDb.get("topups", params[0])) };
+});
+on("POST", /^\/orders\/(SLD-\d+)\/pay$/, async ({ uid, params }) => {
+  requireUser(uid);
+  await sleep(400);
+  return payFromBalance(uid!, params[0]);
+});
+on("POST", /^\/admin\/topups\/(TP-\d+)\/approve$/, async ({ uid, params, body }) => {
+  requireAdmin(uid);
+  demoDecideTopup(params[0], true, body?.amount ? Number(body.amount) : undefined);
+  return { topup: publicTopup(demoDb.get("topups", params[0])) };
+});
+on("POST", /^\/admin\/topups\/(TP-\d+)\/reject$/, async ({ uid, params, body }) => {
+  requireAdmin(uid);
+  demoDecideTopup(params[0], false, undefined, String(body?.reason ?? ""));
+  return { topup: publicTopup(demoDb.get("topups", params[0])) };
+});
+on("GET", /^\/admin\/topups\/(TP-\d+)\/receipt$/, async ({ uid, params }) => {
+  requireAdmin(uid);
+  const t = demoDb.get("topups", params[0]);
+  if (!t?.receipt) throw new ApiErr(404, "NOT_FOUND", "Chek yuklanmagan");
+  return { type: "image/jpeg", dataUrl: t.receipt };
+});
+on("POST", /^\/admin\/users\/([^/]+)\/balance$/, async ({ uid, params, body }) => {
+  requireAdmin(uid);
+  const target = params[0].startsWith("tg_") ? params[0] : `tg_${params[0]}`;
+  const balance = moveBalance(target, Number(body?.delta), "admin", null, String(body?.note ?? ""));
+  return { balance };
+});
+on("POST", /^\/admin\/orders\/([^/]+)\/refund$/, async ({ uid, params }) => {
+  requireAdmin(uid);
+  const o = demoDb.get("orders", params[0]);
+  if (!o || o.status !== "FAILED" || o.paymentStatus !== "PAID") throw new ApiErr(409, "REFUND_NOT_ALLOWED", "Faqat to‘langan FAILED buyurtma pulini qaytarish mumkin");
+  const balance = moveBalance(o.uid, o.amount, "refund", params[0], null);
+  demoDb.update("orders", params[0], { status: "REFUNDED", paymentStatus: "REFUNDED", updatedAt: Timestamp.now() });
+  chat.push({ chat: "user", from: "bot", html: `↩️ <b>Pul balansingizga qaytarildi</b>\n\nBuyurtma: <b>#${params[0]}</b>\n💰 +${fmt(o.amount)}\n💼 Balans: <b>${fmt(balance)}</b>` });
+  return { balance, amount: o.amount };
 });
 
 // ---- admin ----

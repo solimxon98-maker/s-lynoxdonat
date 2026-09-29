@@ -32,13 +32,14 @@ function saveLast(mlbbId: string, serverId: string) {
 }
 
 interface CreateOrderResponse {
-  order: { id: string; orderNo: string };
-  payment: { id: string; mode: "in_app_mock" | "redirect"; payUrl: string | null; status: string };
+  order: { id: string; orderNo: string; amount: number };
+  payment: { id: string; mode: "balance" | "in_app_mock" | "redirect"; payUrl: string | null; status: string };
+  balancePay?: { result: "paid" | "already_paid" | "insufficient" | "closed"; balance: number; need: number };
 }
 
 export function DonatePage() {
   const navigate = useNavigate();
-  const { mockMode, profile } = useTelegramAuth();
+  const { mockMode, profile, refreshProfile } = useTelegramAuth();
   const tier: Tier = profile?.tier ?? "oddiy";
   const last = useMemo(loadLast, []);
 
@@ -128,8 +129,19 @@ export function DonatePage() {
     setSubmitError(null);
     try {
       const r = await api<CreateOrderResponse>("/orders", {
-        body: { productId: selected.id, mlbbId: player.mlbbId, serverId: player.serverId, idempotencyKey: idemKey.current },
+        body: { productId: selected.id, mlbbId: player.mlbbId, serverId: player.serverId, idempotencyKey: idemKey.current, payWithBalance: true },
       });
+      if (r.balancePay) {
+        refreshProfile().catch(() => undefined);
+        if (r.balancePay.result === "insufficient") {
+          haptic.tap();
+          navigate(`/wallet?order=${encodeURIComponent(r.order.orderNo)}&need=${r.order.amount}`);
+        } else {
+          haptic.success();
+          navigate(`/orders/${r.order.id}`);
+        }
+        return;
+      }
       haptic.success();
       if (r.payment.mode === "redirect" && r.payment.payUrl) {
         openExternal(r.payment.payUrl);
@@ -287,6 +299,7 @@ export function DonatePage() {
           submitting={submitting}
           error={submitError}
           mock={mockMode}
+          balance={profile?.balance ?? 0}
           onClose={() => !submitting && setSelected(null)}
           onPay={pay}
         />
@@ -327,11 +340,13 @@ function ConfirmSheet(props: {
   submitting: boolean;
   error: string | null;
   mock: boolean;
+  balance: number;
   onClose: () => void;
   onPay: () => void;
 }) {
-  const { product, tier, player, submitting, error, mock, onClose, onPay } = props;
+  const { product, tier, player, submitting, error, mock, balance, onClose, onPay } = props;
   const price = priceFor(product, tier);
+  const enough = balance >= price;
   const rows: [string, string, string][] = [
     ["🎮", "O‘yin", "Mobile Legends"],
     ["👤", "Nickname", player.nickname ?? "—"],
@@ -380,6 +395,14 @@ function ConfirmSheet(props: {
           </div>
         </div>
 
+        <div className={`mt-3 flex items-center justify-between rounded-2xl border px-4 py-3 text-sm ${enough ? "border-emerald-400/20 bg-emerald-400/5" : "border-amber-400/30 bg-amber-400/10"}`}>
+          <span className="text-slate-300">💼 Balansingiz</span>
+          <span className="text-right">
+            <b className="text-white">{formatSum(balance)}</b>
+            {!enough && <span className="block text-xs text-amber-300">yana {formatSum(price - balance)} kerak</span>}
+          </span>
+        </div>
+
         {error && (
           <div className="mt-4">
             <Alert>{error}</Alert>
@@ -388,11 +411,14 @@ function ConfirmSheet(props: {
 
         <button className="btn-primary mt-5 w-full py-4 text-base" onClick={onPay} disabled={submitting}>
           {submitting ? <Spinner size={18} /> : null}
-          {submitting ? "Buyurtma yaratilmoqda..." : "💳 TO‘LOV QILISH"}
+          {submitting ? "Buyurtma yaratilmoqda..." : enough ? "💼 BALANSDAN TO‘LASH" : "➕ BALANSNI TO‘LDIRISH"}
         </button>
+        {!enough && !submitting && (
+          <p className="mt-2 text-center text-xs text-slate-400">Buyurtma saqlanadi — balansni to‘ldirgach bir bosishda to‘laysiz</p>
+        )}
         <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-slate-500">
           <ShieldCheck size={13} />
-          {mock ? "Test rejim: haqiqiy pul yechilmaydi" : "Donat faqat to‘lov tasdiqlangandan so‘ng yuboriladi"}
+          {mock ? "Test rejim: olmos haqiqatda yuborilmaydi" : "Donat faqat to‘lov tasdiqlangandan so‘ng yuboriladi"}
         </p>
         {product.oncePerAccount && (
           <p className="mt-2 text-center text-xs text-fuchsia-300/90">🎁 Bonus paket bitta akkauntga faqat 1 marta beriladi</p>

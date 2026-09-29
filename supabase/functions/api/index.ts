@@ -26,7 +26,12 @@ import {
 import { applyPaymentEvent } from "../_shared/services/payments.ts";
 import { referralLink, referralProgress } from "../_shared/services/referrals.ts";
 import { getFastDonateCredentials, getSetting, maskSecret, mergeSetting, saveFastDonateCredentials } from "../_shared/services/settings.ts";
-import { requireActiveUser, upsertTelegramUser } from "../_shared/services/users.ts";
+import { getUser, requireActiveUser, upsertTelegramUser } from "../_shared/services/users.ts";
+import {
+  adjustBalance, approveTopup, createTopup, getOwnTopup, getWallet, payOrderFromBalance, publicTopup, refundOrder, rejectTopup,
+  splitFileRef, TOPUP_NO_RE, uploadReceipt,
+} from "../_shared/services/wallet.ts";
+import { downloadTelegramFile } from "../_shared/telegramApi.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -78,6 +83,7 @@ async function publicUser(u: TgUser) {
     createdAt: ms(u.created_at),
     tier,
     tierUntil: tier === "oddiy" ? null : ms(u.tier_until),
+    balance: Number(u.balance ?? 0),
     referral: { ...referralProgress(u), link: await referralLink(u.id) },
   };
 }
@@ -119,7 +125,49 @@ on("POST", /^\/player\/check$/, async ({ req, body }) => {
 
 on("POST", /^\/orders$/, async ({ req, body }) => {
   const user = await requireUser(req);
-  return await createOrder(user, body);
+  const res = await createOrder(user, body);
+  // Balansdan darhol to'lash (Web App "Balansdan to'lash" tugmasi)
+  if (body.payWithBalance === true && res.payment.mode === "balance") {
+    if (res.order.paymentStatus !== "PENDING") {
+      return { ...res, balancePay: { result: res.order.paymentStatus === "PAID" ? "already_paid" : "closed", balance: Number(user.balance ?? 0), need: 0 } };
+    }
+    const r = await payOrderFromBalance(user, res.order.orderNo);
+    if (r.result === "paid") background(processPaidOrder(res.order.orderNo));
+    return { ...res, balancePay: { result: r.result, balance: Number(r.balance), need: r.need ?? 0 } };
+  }
+  return res;
+});
+
+/** Mavjud (to'lanmagan) buyurtmani balansdan to'lash */
+on("POST", /^\/orders\/(SLD-\d{6,})\/pay$/, async ({ req, params }) => {
+  const user = await requireUser(req);
+  const r = await payOrderFromBalance(user, params[0]);
+  if (r.result === "paid") {
+    await writeLog("info", "order_paid_balance", { orderNo: params[0], userId: user.id });
+    background(processPaidOrder(params[0]));
+  }
+  return { result: r.result, balance: Number(r.balance), need: r.need ?? 0 };
+});
+
+// ---------------------------------------------------------------- balans
+on("GET", /^\/wallet$/, async ({ req }) => {
+  const user = await requireUser(req);
+  return await getWallet(user);
+});
+
+on("POST", /^\/topups$/, async ({ req, body }) => {
+  const user = await requireUser(req);
+  return await createTopup(user, body);
+});
+
+on("GET", /^\/topups\/(TP-\d{6,})$/, async ({ req, params }) => {
+  const user = await requireUser(req);
+  return { topup: publicTopup(await getOwnTopup(user, params[0])), balance: Number(user.balance ?? 0) };
+});
+
+on("POST", /^\/topups\/(TP-\d{6,})\/receipt$/, async ({ req, params, body }) => {
+  const user = await requireUser(req);
+  return await uploadReceipt(user, params[0], body.image);
 });
 
 on("GET", /^\/orders$/, async ({ req }) => {
@@ -149,6 +197,7 @@ on("GET", /^\/payments\/([0-9a-f-]{36})$/i, async ({ req, params }) => {
   const o = await getOrder(p.order_no);
   return {
     payment: { id: p.id, orderId: p.order_no, amount: p.amount, currency: p.currency, status: p.status, provider: p.provider, mode: p.mode, payUrl: p.pay_url },
+    balance: Number(user.balance ?? 0),
     order: {
       orderNo: o.order_no, nickname: o.nickname, mlbbId: o.mlbb_id, serverId: o.server_id,
       name: o.product.name, category: o.product.category, diamonds: o.product.diamonds, bonus: o.product.bonus, status: o.status,
@@ -258,6 +307,50 @@ on("POST", /^\/admin\/orders\/(SLD-\d{6,})\/mark-success$/, async ({ req, params
   return {};
 });
 
+// ---------------------------------------------------------------- admin: balans
+on("POST", /^\/admin\/topups\/(TP-\d{6,})\/approve$/, async ({ req, params, body }) => {
+  const adminId = await requireAdmin(req);
+  const amount = body.amount === undefined || body.amount === null || body.amount === "" ? null : Number(body.amount);
+  const r = await approveTopup(params[0], amount, `admin:${adminId}`);
+  if (r.result !== "approved") throw new HttpError(409, "ALREADY_DECIDED", "Bu so‘rov allaqachon ko‘rib chiqilgan");
+  return { topup: publicTopup(r.topup), balance: r.balance };
+});
+
+on("POST", /^\/admin\/topups\/(TP-\d{6,})\/reject$/, async ({ req, params, body }) => {
+  const adminId = await requireAdmin(req);
+  const r = await rejectTopup(params[0], String(body.reason ?? ""), `admin:${adminId}`);
+  if (r.result !== "rejected") throw new HttpError(409, "ALREADY_DECIDED", "Bu so‘rov allaqachon ko‘rib chiqilgan");
+  return { topup: publicTopup(r.topup) };
+});
+
+/** Chek rasmi (Telegram'dan server orqali — bot token brauzerga chiqmaydi) */
+on("GET", /^\/admin\/topups\/(TP-\d{6,})\/receipt$/, async ({ req, params }) => {
+  await requireAdmin(req);
+  if (!TOPUP_NO_RE.test(params[0])) throw notFound();
+  const { data } = await db().from("topups").select("receipt_file_id").eq("topup_no", params[0]).maybeSingle();
+  if (!data?.receipt_file_id) throw notFound("Chek yuklanmagan");
+  const [, fileId] = splitFileRef(data.receipt_file_id as string);
+  const f = await downloadTelegramFile(fileId).catch(() => null);
+  if (!f) throw new HttpError(502, "RECEIPT_UNAVAILABLE", "Chekni Telegram'dan olib bo‘lmadi");
+  let bin = "";
+  for (let i = 0; i < f.bytes.length; i += 0x8000) bin += String.fromCharCode(...f.bytes.subarray(i, i + 0x8000));
+  return { type: f.type, dataUrl: `data:${f.type};base64,${btoa(bin)}` };
+});
+
+on("POST", /^\/admin\/users\/(\d{1,20})\/balance$/, async ({ req, params, body }) => {
+  const adminId = await requireAdmin(req);
+  const userId = Number(params[0]);
+  if (!(await getUser(userId))) throw notFound("Foydalanuvchi topilmadi");
+  const balance = await adjustBalance(userId, Number(body.delta), String(body.note ?? ""), `admin:${adminId}`);
+  return { balance };
+});
+
+on("POST", /^\/admin\/orders\/(SLD-\d{6,})\/refund$/, async ({ req, params }) => {
+  const adminId = await requireAdmin(req);
+  const r = await refundOrder(params[0], `admin:${adminId}`);
+  return { balance: Number(r.balance), amount: r.amount };
+});
+
 // ---------------------------------------------------------------- payment webhooks
 /** Click / Payme / Uzum webhooklari. Imzo tekshiruvi provider klassida. */
 async function handleWebhook(req: Request, providerId: string): Promise<Response> {
@@ -299,7 +392,8 @@ export async function handler(req: Request): Promise<Response> {
       if (r.method !== req.method) continue;
       const m = r.re.exec(path);
       if (!m) continue;
-      const body = await readJson(req);
+      // Chek rasmi uchun kattaroq so'rov ruxsat etiladi
+      const body = await readJson(req, /\/receipt$/.test(path) && req.method === "POST" ? 8_000_000 : 100_000);
       const data = await r.h({ req, path, params: m.slice(1), body });
       return json(req, 200, { ok: true, ...(data as Record<string, unknown>) });
     }

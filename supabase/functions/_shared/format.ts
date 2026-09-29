@@ -26,6 +26,7 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   SUCCESS: "✅ Donat muvaffaqiyatli",
   FAILED: "❌ Donat xatosi",
   CANCELLED: "🚫 Bekor qilingan",
+  REFUNDED: "↩️ Pul balansga qaytarildi",
 };
 
 export const TIER_LABEL: Record<Tier, string> = { oddiy: "Oddiy", bronza: "🥉 Bronza", vip: "👑 VIP" };
@@ -39,4 +40,15 @@ export function productLabel(p: Pick<OrderProduct, "name" | "category" | "diamon
 export function effectiveTier(tier: Tier | null | undefined, until: string | null | undefined, now = Date.now()): Tier {
   if (!tier || tier === "oddiy") return "oddiy";
   return until && new Date(until).getTime() > now ? tier : "oddiy";
+}
+
+export const BANK_LABEL: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
+
+/** 9860 1234 5678 9012 */
+export function formatCardNumber(n: string): string {
+  return n.replace(/\D/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+/** Humo •••• 9012 */
+export function cardShort(c: { bank: string; number: string }): string {
+  return `${BANK_LABEL[c.bank] ?? "Karta"} •••• ${c.number.slice(-4)}`;
 }

@@ -1,4 +1,4 @@
-import { Cable, Gem, LayoutDashboard, LogOut, Package, Users } from "lucide-react";
+import { Cable, CreditCard, Gem, LayoutDashboard, LogOut, Package, Receipt, Users } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { Navigate, NavLink, Outlet } from "react-router-dom";
 import { Logo } from "../components/Logo";
@@ -8,8 +8,10 @@ import { adminSignOut, currentAdmin, onAdminAuthChange, type AdminUser } from ".
 const nav = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/admin/products", label: "Paketlar", icon: Gem, end: false },
+  { to: "/admin/topups", label: "To‘ldirishlar", icon: Receipt, end: false },
   { to: "/admin/orders", label: "Buyurtmalar", icon: Package, end: false },
   { to: "/admin/users", label: "Foydalanuvchilar", icon: Users, end: false },
+  { to: "/admin/cards", label: "Kartalar", icon: CreditCard, end: false },
   { to: "/admin/fastdonate", label: "FastDonate", icon: Cable, end: false },
 ];
 

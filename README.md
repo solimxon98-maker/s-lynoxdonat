@@ -55,7 +55,7 @@ s-lynoxdonat/
 │   │   ├── telegram-bot/  bot webhook
 │   │   ├── cron/          har daqiqalik ishlar
 │   │   └── _shared/       config, db, sessiya, initData, Telegram, providerlar, servislar
-│   └── tests/             sql.test.ts (45 tekshiruv) · e2e.test.ts (38 tekshiruv)
+│   └── tests/             sql.test.ts · e2e.test.ts (76 tekshiruv)
 └── webapp/                React + Vite + TypeScript + Tailwind
     ├── src/pages          Asosiy, Donat, To‘lov, Buyurtmalar, Buyurtma, Profil
     ├── src/admin          Login, Dashboard, Paketlar, Buyurtmalar, Foydalanuvchilar, FastDonate
@@ -99,15 +99,31 @@ Statuslar: `AWAITING_PAYMENT` ⏳ → `PAID` 💳 → `PROCESSING` 🔄 → `SUC
 - Aylana: **5** → Bronza 7 kun (VIP amal qilmayotgan bo‘lsa), **10** → VIP 7 kun va hisob 0 dan; har keyingi 10 → VIP yana +1 hafta.
 - Admin ham qo‘lda beradi: Foydalanuvchilar → «+🥉 7 kun» / «+👑 7 kun» / «Bekor».
 
-## 7. FastDonate va to‘lov
+## 7. Balans (hamyon) — kartaga o‘tkazma
+
+YaTT/merchant shartnomasiz ishlaydi:
+
+1. Mijoz Web App → **💰 Balans** → summa + karta tanlaydi → karta raqamini nusxalab, **aniq shu summani** o‘tkazadi.
+2. Chek rasmini yuklaydi (yoki botga rasm qilib yuboradi). So‘rov `PENDING` bo‘ladi.
+3. Adminlarga botda chek rasmi + **✅ Tasdiqlash / ✏️ Boshqa summa / ❌ Rad etish** tugmalari keladi (admin panel → To‘ldirishlar ham).
+4. ✅ bosilganda balans to‘ladi (faqat bir marta — `approve_topup`), mijozga xabar boradi.
+5. Xarid balansdan (`pay_order_from_balance`): yetmasa buyurtma saqlanadi va "yana X so‘m" deb to‘ldirishga yo‘naltiriladi.
+
+- Kartalar: admin panel → **Kartalar** (Humo, Uzcard, …; yoqish/o‘chirish).
+- Xato bo‘lgan buyurtma: admin panel → Buyurtmalar → **↩️ Balansga** (pul qaytadi).
+- Balansni qo‘lda o‘zgartirish: Foydalanuvchilar → **± Balans** (izoh majburiy, mijozga xabar boradi).
+- Har bir pul harakati `balance_tx` jurnalida. Chek yuborilmagan so‘rov 3 soatda yopiladi.
+- ⚠️ ✅ bosishdan oldin **bank ilovasida pul tushganini tekshiring** — soxta chek rasmlari uchraydi.
+
+## 8. FastDonate va to‘lov
 
 - `MOCK_MODE=true` — player tekshirish, to‘lov va donat simulyatsiya. Test ID lar: `…999` → ORDER_FAILED, `…998` → balans yetarli emas, `…997` → timeout, `000000000` → akkaunt topilmadi.
 - `supabase/functions/_shared/providers/donate/FastDonateService.ts` — fastdonate.su ning ommaviy API hujjati topilmagani uchun endpointlar **taxmin qilinmagan**. Transport (timeout, xatolar, kalitlar) tayyor; hujjat kelganda faqat shu fayldagi integratsiya nuqtalari to‘ldiriladi.
-- To‘lov: `providers/payment/` — hozir `MockPaymentProvider`. Click/Payme/Uzum: yangi klass + registry + `PAYMENT_PROVIDER`; webhook: `https://<ref>.supabase.co/functions/v1/api/payments/webhook/<provider>`.
+- To‘lov: `providers/payment/` — standart `BalancePaymentProvider` (balansdan). Click/Payme/Uzum: yangi klass + registry + `PAYMENT_PROVIDER`; webhook: `https://<ref>.supabase.co/functions/v1/api/payments/webhook/<provider>`.
 
 ---
 
-## 8. Ishga tushirish (bir marta)
+## 9. Ishga tushirish (bir marta)
 
 Kerak: GitHub akkaunt (**solimxon98-maker**), Supabase akkaunt (GitHub orqali kirasiz), Telegram bot.
 
@@ -135,7 +151,7 @@ Keyingi o‘zgarishlar: `main` ga push qilinsa ikkala workflow avtomatik ishlayd
 
 **Real rejim:** FastDonate API ulangach (admin panel → FastDonate yoki `FASTDONATE_*` secrets) va to‘lov provider qo‘shilgach → Variable `MOCK_MODE=false` → «Supabase» workflow’ni qayta ishga tushiring.
 
-## 9. Lokal ishlash va testlar
+## 10. Lokal ishlash va testlar
 
 ```bash
 cd webapp && npm install
@@ -148,6 +164,6 @@ deno run -A sql.test.ts   # sxema, SQL funksiyalar, RLS — 45 tekshiruv
 deno run -A e2e.test.ts   # bot + API + admin + cron — 38 tekshiruv
 ```
 
-## 10. Bepul limitlar (2026-09)
+## 11. Bepul limitlar (2026-09)
 
 Supabase Free: 500 MB baza, 5 GB trafik, 500 000 Edge Function chaqiruv/oy, 50 000 MAU, 2 ta faol loyiha, 1 hafta faolsiz qolsa pauza (cron har daqiqa ishlagani uchun faol turadi). GitHub Pages: 1 GB sayt, ~100 GB/oy trafik. Karta talab qilinmaydi.

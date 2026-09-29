@@ -14,6 +14,9 @@ interface Stats {
   success: number;
   pending: number;
   failed: number;
+  pendingTopups: number;
+  todayTopups: number;
+  totalBalance: number;
   recent: OrderRecord[];
   provider: { connected?: boolean; balance?: number | null; currency?: string | null; lowBalance?: boolean; message?: string } | null;
 }
@@ -62,6 +65,20 @@ export function DashboardPage() {
           </Alert>
         </div>
       )}
+
+      {stats && stats.pendingTopups > 0 && (
+        <Link to="/admin/topups" className="mb-4 block">
+          <Alert tone="amber">
+            <span className="font-semibold">🧾 {stats.pendingTopups} ta to‘ldirish so‘rovi tekshirilishini kutmoqda →</span>
+          </Alert>
+        </Link>
+      )}
+
+      <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3">
+        <Kpi icon={<Wallet size={18} />} label="Bugun to‘ldirildi (kartaga tushgan)" value={stats ? formatSum(stats.todayTopups) : "…"} tone="text-emerald-300" />
+        <Kpi icon={<Clock size={18} />} label="Tekshiruvdagi to‘ldirishlar" value={stats ? formatNumber(stats.pendingTopups) : "…"} tone="text-amber-300" />
+        <Kpi icon={<Wallet size={18} />} label="Mijozlar balansi (jami)" value={stats ? formatSum(stats.totalBalance) : "…"} tone="text-neon-blue" />
+      </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi icon={<Package size={18} />} label="Bugungi buyurtmalar" value={stats ? formatNumber(stats.todayOrders) : "…"} tone="text-neon-blue" />

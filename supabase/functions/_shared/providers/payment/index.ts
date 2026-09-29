@@ -1,4 +1,5 @@
 import { config } from "../../config.ts";
+import { BalancePaymentProvider } from "./BalancePaymentProvider.ts";
 import { MockPaymentProvider } from "./MockPaymentProvider.ts";
 import type { PaymentProvider } from "./types.ts";
 
@@ -14,6 +15,7 @@ export * from "./types.ts";
  *   4. Provider kabinetida webhook URL: https://<hosting-domain>/api/payments/webhook/click
  */
 const registry: Record<string, PaymentProvider> = {
+  balance: new BalancePaymentProvider(),
   mock: new MockPaymentProvider(),
 };
 
@@ -21,14 +23,17 @@ export function getPaymentProviderById(id: string): PaymentProvider | null {
   return registry[id] ?? null;
 }
 
-/** Yangi to'lov yaratishda ishlatiladigan faol provider */
+/**
+ * Yangi to'lov yaratishda ishlatiladigan faol provider.
+ * Standart: "balance" (kartaga o'tkazma -> admin tasdig'i -> balans). "mock" faqat MOCK_MODE=true da.
+ */
 export function getActivePaymentProvider(): PaymentProvider {
-  if (config.mockMode) return registry.mock;
-  const p = registry[config.payment.provider];
-  if (!p || p.id === "mock") {
-    throw new Error(
-      `To'lov provider "${config.payment.provider}" hali ulanmagan. MOCK_MODE=true qiling yoki providerni registry ga qo'shing.`,
-    );
+  const id = config.payment.provider || "balance";
+  if (id === "mock") {
+    if (!config.mockMode) throw new Error("PAYMENT_PROVIDER=mock faqat MOCK_MODE=true bilan ishlaydi");
+    return registry.mock;
   }
+  const p = registry[id];
+  if (!p) throw new Error(`To'lov provider "${id}" hali ulanmagan. PAYMENT_PROVIDER=balance qiling yoki providerni registry ga qo'shing.`);
   return p;
 }

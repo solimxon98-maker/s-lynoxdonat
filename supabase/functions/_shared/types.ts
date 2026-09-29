@@ -1,7 +1,7 @@
 /** Bazadagi (snake_case) yozuvlar */
 
-export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "CANCELLED";
-export type OrderStatus = "AWAITING_PAYMENT" | "PAID" | "PROCESSING" | "SUCCESS" | "FAILED" | "CANCELLED";
+export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "CANCELLED" | "REFUNDED";
+export type OrderStatus = "AWAITING_PAYMENT" | "PAID" | "PROCESSING" | "SUCCESS" | "FAILED" | "CANCELLED" | "REFUNDED";
 export type ProductCategory = "bonus" | "diamonds" | "pass";
 export type Tier = "oddiy" | "bronza" | "vip";
 
@@ -22,6 +22,7 @@ export interface TgUser {
   referred_by: number | null;
   referrals_total: number;
   referral_cycle: number;
+  balance: number;
   created_at: string;
   updated_at: string;
 }
@@ -92,6 +93,47 @@ export interface Payment {
   external_id: string | null;
   pay_url: string | null;
   mode: string | null;
+  created_at: string;
+}
+
+export type TopupStatus = "AWAITING_RECEIPT" | "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+export type CardBank = "humo" | "uzcard" | "visa" | "mastercard" | "other";
+
+export interface PaymentCard {
+  id: string;
+  bank: CardBank;
+  number: string;
+  holder: string;
+  note: string;
+  active: boolean;
+  sort_order: number;
+}
+
+export interface Topup {
+  topup_no: string;
+  user_id: number;
+  amount: number;
+  credited: number | null;
+  card_id: string | null;
+  card: { bank: CardBank; number: string; holder: string };
+  status: TopupStatus;
+  receipt_file_id: string | null;
+  receipt_at: string | null;
+  admin_messages: { chat_id: string | number; message_id: number }[];
+  reject_reason: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  created_at: string;
+}
+
+export interface BalanceTx {
+  id: number;
+  user_id: number;
+  delta: number;
+  balance_after: number;
+  kind: "topup" | "purchase" | "refund" | "admin";
+  ref: string | null;
+  note: string | null;
   created_at: string;
 }
 

@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentStatus } from "./types";
+import type { OrderStatus, PaymentStatus, TopupStatus } from "./types";
 
 const TZ = "Asia/Tashkent";
 
@@ -68,6 +68,7 @@ export const ORDER_STATUS: Record<OrderStatus, StatusMeta> = {
   SUCCESS: { label: "Donat muvaffaqiyatli", short: "Muvaffaqiyatli", emoji: "✅", tone: "emerald" },
   FAILED: { label: "Donat xatosi", short: "Xatolik", emoji: "❌", tone: "rose" },
   CANCELLED: { label: "Bekor qilingan", short: "Bekor", emoji: "🚫", tone: "slate" },
+  REFUNDED: { label: "Pul balansga qaytarildi", short: "Qaytarildi", emoji: "↩️", tone: "sky" },
 };
 
 export const PAYMENT_STATUS: Record<PaymentStatus, StatusMeta> = {
@@ -75,6 +76,7 @@ export const PAYMENT_STATUS: Record<PaymentStatus, StatusMeta> = {
   PAID: { label: "PAID", short: "To‘langan", emoji: "💳", tone: "emerald" },
   FAILED: { label: "FAILED", short: "Xato", emoji: "❌", tone: "rose" },
   CANCELLED: { label: "CANCELLED", short: "Bekor", emoji: "🚫", tone: "slate" },
+  REFUNDED: { label: "REFUNDED", short: "Qaytarildi", emoji: "↩️", tone: "sky" },
 };
 
 export const TONE_CLASS: Record<StatusMeta["tone"], string> = {
@@ -99,3 +101,20 @@ export function productText(p: { name: string; category?: string; diamonds: numb
 export function productEmoji(p: { category?: string }): string {
   return p.category === "pass" ? "🎫" : "💎";
 }
+
+export const TOPUP_STATUS: Record<TopupStatus, StatusMeta> = {
+  AWAITING_RECEIPT: { label: "Chek kutilmoqda", short: "Chek kerak", emoji: "🧾", tone: "amber" },
+  PENDING: { label: "Tekshirilmoqda", short: "Tekshiruvda", emoji: "⏳", tone: "violet" },
+  APPROVED: { label: "Tasdiqlandi", short: "Tasdiqlandi", emoji: "✅", tone: "emerald" },
+  REJECTED: { label: "Rad etildi", short: "Rad etildi", emoji: "❌", tone: "rose" },
+  EXPIRED: { label: "Muddati o‘tdi", short: "Yopildi", emoji: "⌛", tone: "slate" },
+};
+
+export const BANK_LABEL: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
+
+/** 9860 1234 5678 9012 */
+export function formatCard(n: string): string {
+  return n.replace(/\D/g, "").replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+export const TX_KIND: Record<string, string> = { topup: "To‘ldirish", purchase: "Xarid", refund: "Qaytarildi", admin: "Admin" };

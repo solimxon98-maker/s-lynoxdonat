@@ -77,7 +77,7 @@ export const config = {
   },
   payment: {
     get provider() {
-      return str("PAYMENT_PROVIDER", "mock").toLowerCase();
+      return str("PAYMENT_PROVIDER", "balance").toLowerCase();
     },
   },
 };

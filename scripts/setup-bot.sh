@@ -13,7 +13,7 @@ call() {
 }
 
 call setWebhook "{\"url\":\"$WEBHOOK_URL\",\"secret_token\":\"$TELEGRAM_WEBHOOK_SECRET\",\"allowed_updates\":[\"message\",\"callback_query\"],\"max_connections\":40}"
-call setMyCommands '{"commands":[{"command":"start","description":"Asosiy menyu"},{"command":"orders","description":"📦 Buyurtmalarim"},{"command":"profile","description":"👤 Profil"},{"command":"invite","description":"👥 Do‘st taklif qilish"},{"command":"help","description":"💬 Yordam"}]}'
+call setMyCommands '{"commands":[{"command":"start","description":"Asosiy menyu"},{"command":"orders","description":"📦 Buyurtmalarim"},{"command":"balance","description":"💰 Balans"},{"command":"profile","description":"👤 Profil"},{"command":"invite","description":"👥 Do‘st taklif qilish"},{"command":"help","description":"💬 Yordam"}]}'
 call setMyName '{"name":"S-LynoxDonat"}' || true   # Telegram ba'zan tez-tez o'zgartirishni cheklaydi
 call setMyShortDescription '{"short_description":"Mobile Legends uchun tezkor va qulay donat 💎"}' || true
 call setMyDescription '{"description":"S-LynoxDonat — Mobile Legends: Bang Bang uchun Diamond xarid qilish xizmati.\n\n⚡ Tezkor xizmat\n🔒 Xavfsiz to‘lov\n🤖 Avtomatik buyurtma\n🕐 24/7"}' || true

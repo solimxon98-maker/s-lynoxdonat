@@ -15,8 +15,8 @@ export interface CreatePaymentInput {
 }
 
 export interface CreatePaymentResult {
-  /** "in_app_mock" — Web App ichidagi test to'lov oynasi; "redirect" — provider sahifasiga o'tish */
-  mode: "in_app_mock" | "redirect";
+  /** "balance" — ichki balansdan; "in_app_mock" — test oynasi; "redirect" — provider sahifasiga o'tish */
+  mode: "balance" | "in_app_mock" | "redirect";
   payUrl: string | null;
   externalId: string | null;
 }

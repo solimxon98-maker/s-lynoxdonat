@@ -4,7 +4,8 @@
  * Demo build'da bu modul brauzer ichidagi mock bilan almashtiriladi (vite.demo.config.ts).
  */
 import { supabase } from "./supabase";
-import type { OrderRecord, Product, ProductCategory, UserRecord } from "./types";
+import type { CardBank, OrderRecord, PaymentCard, Product, ProductCategory, TopupRecord, UserRecord } from "./types";
+import { BANK_LABEL } from "./format";
 
 type Row = Record<string, unknown>;
 const t = (v: unknown): number | null => (typeof v === "string" && v ? new Date(v).getTime() : null);
@@ -160,6 +161,9 @@ export interface DashboardStats {
   success: number;
   pending: number;
   failed: number;
+  pendingTopups: number;
+  todayTopups: number;
+  totalBalance: number;
 }
 
 export async function dashboardStats(dayStart: Date): Promise<DashboardStats> {
@@ -173,6 +177,9 @@ export async function dashboardStats(dayStart: Date): Promise<DashboardStats> {
     success: Number(s.success ?? 0),
     pending: Number(s.pending ?? 0),
     failed: Number(s.failed ?? 0),
+    pendingTopups: Number(s.pending_topups ?? 0),
+    todayTopups: Number(s.today_topups ?? 0),
+    totalBalance: Number(s.total_balance ?? 0),
   };
 }
 
@@ -190,6 +197,7 @@ const toUser = (r: Row): UserRecord => ({
   firstName: String(r.first_name ?? ""),
   lastName: (r.last_name as string | null) ?? null,
   blocked: Boolean(r.blocked),
+  balance: Number(r.balance ?? 0),
   ordersCount: Number(r.orders_count ?? 0),
   successfulOrders: Number(r.successful_orders ?? 0),
   totalSpent: Number(r.total_spent ?? 0),
@@ -210,4 +218,68 @@ export async function listUsers(limit = 2000): Promise<UserRecord[]> {
 
 export async function setUserBlocked(id: string, blocked: boolean): Promise<void> {
   fail((await supabase().from("tg_users").update({ blocked }).eq("id", id)).error);
+}
+
+// ---------------------------------------------------------------- kartalar
+const toCard = (r: Row): PaymentCard => ({
+  id: String(r.id),
+  bank: r.bank as CardBank,
+  bankLabel: BANK_LABEL[String(r.bank)] ?? "Karta",
+  number: String(r.number),
+  holder: String(r.holder ?? ""),
+  note: String(r.note ?? ""),
+  active: Boolean(r.active),
+  sortOrder: Number(r.sort_order ?? 0),
+});
+
+export type CardInput = { bank: CardBank; number: string; holder: string; note: string; active: boolean; sortOrder: number };
+const fromCard = (c: CardInput): Row => ({ bank: c.bank, number: c.number.replace(/\D/g, ""), holder: c.holder.trim(), note: c.note.trim(), active: c.active, sort_order: c.sortOrder });
+
+export async function listCards(): Promise<PaymentCard[]> {
+  const { data, error } = await supabase().from("payment_cards").select("*").order("sort_order", { ascending: true });
+  fail(error);
+  return (data ?? []).map(toCard);
+}
+export async function createCard(c: CardInput): Promise<void> {
+  fail((await supabase().from("payment_cards").insert(fromCard(c))).error);
+}
+export async function updateCard(id: string, c: CardInput): Promise<void> {
+  fail((await supabase().from("payment_cards").update(fromCard(c)).eq("id", id)).error);
+}
+export async function deleteCard(id: string): Promise<void> {
+  fail((await supabase().from("payment_cards").delete().eq("id", id)).error);
+}
+
+// ---------------------------------------------------------------- to'ldirishlar
+export async function listTopups(status: "PENDING" | "ALL", limit = 300): Promise<TopupRecord[]> {
+  let q = supabase().from("topups").select("*").order("created_at", { ascending: false }).limit(limit);
+  if (status === "PENDING") q = q.in("status", ["PENDING", "AWAITING_RECEIPT"]);
+  const { data, error } = await q;
+  fail(error);
+  const rows = (data ?? []) as Row[];
+  const ids = [...new Set(rows.map((r) => r.user_id))];
+  const users = new Map<string, Row>();
+  if (ids.length) {
+    const { data: us } = await supabase().from("tg_users").select("id,username,first_name").in("id", ids);
+    for (const u of (us ?? []) as Row[]) users.set(String(u.id), u);
+  }
+  return rows.map((r) => {
+    const card = (r.card ?? {}) as Row;
+    const u = users.get(String(r.user_id));
+    return {
+      topupNo: String(r.topup_no),
+      amount: Number(r.amount),
+      credited: r.credited === null || r.credited === undefined ? null : Number(r.credited),
+      status: r.status as TopupRecord["status"],
+      card: { bank: card.bank as CardBank, bankLabel: BANK_LABEL[String(card.bank)] ?? "Karta", number: String(card.number ?? ""), holder: String(card.holder ?? "") },
+      hasReceipt: Boolean(r.receipt_file_id),
+      rejectReason: (r.reject_reason as string | null) ?? null,
+      createdAt: t(r.created_at),
+      decidedAt: t(r.decided_at),
+      decidedBy: (r.decided_by as string | null) ?? null,
+      userId: String(r.user_id),
+      username: (u?.username as string | null) ?? null,
+      firstName: String(u?.first_name ?? ""),
+    };
+  });
 }

@@ -1,11 +1,12 @@
-import { Gem, Home, Package, User } from "lucide-react";
+import { Gem, Home, Package, User, Wallet } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { haptic } from "../lib/telegram";
 
 const items = [
   { to: "/", label: "Asosiy", icon: Home, end: true },
   { to: "/donate", label: "Donat", icon: Gem, end: false },
-  { to: "/orders", label: "Buyurtmalar", icon: Package, end: false },
+  { to: "/wallet", label: "Balans", icon: Wallet, end: false },
+  { to: "/orders", label: "Buyurtma", icon: Package, end: false },
   { to: "/profile", label: "Profil", icon: User, end: false },
 ];
 
@@ -15,7 +16,7 @@ export function BottomNav() {
       className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-3"
       style={{ paddingBottom: "calc(var(--safe-bottom) + 10px)" }}
     >
-      <div className="grid w-full max-w-md grid-cols-4 rounded-[26px] border border-white/10 bg-ink-900/85 p-1.5 shadow-card backdrop-blur-2xl" style={{ height: "var(--nav-h)" }}>
+      <div className="grid w-full max-w-md grid-cols-5 rounded-[26px] border border-white/10 bg-ink-900/85 p-1.5 shadow-card backdrop-blur-2xl" style={{ height: "var(--nav-h)" }}>
         {items.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}

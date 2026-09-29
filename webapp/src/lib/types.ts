@@ -1,5 +1,5 @@
-export type OrderStatus = "AWAITING_PAYMENT" | "PAID" | "PROCESSING" | "SUCCESS" | "FAILED" | "CANCELLED";
-export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "CANCELLED";
+export type OrderStatus = "AWAITING_PAYMENT" | "PAID" | "PROCESSING" | "SUCCESS" | "FAILED" | "CANCELLED" | "REFUNDED";
+export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "CANCELLED" | "REFUNDED";
 
 export type ProductCategory = "bonus" | "diamonds" | "pass";
 
@@ -25,6 +25,7 @@ export interface Profile {
   referral?: { total: number; cycle: number; bronzaAt: number; vipAt: number; link: string | null };
   tier: Tier;
   tierUntil: number | null;
+  balance?: number;
   telegramId: string;
   username: string | null;
   firstName: string;
@@ -79,6 +80,7 @@ export interface UserRecord {
   firstName: string;
   lastName: string | null;
   blocked: boolean;
+  balance?: number;
   ordersCount: number;
   successfulOrders: number;
   totalSpent: number;
@@ -93,4 +95,56 @@ export interface PlayerCheck {
   mlbbId: string;
   serverId: string;
   mock: boolean;
+}
+
+export type CardBank = "humo" | "uzcard" | "visa" | "mastercard" | "other";
+
+export interface PaymentCard {
+  id: string;
+  bank: CardBank;
+  bankLabel?: string;
+  number: string;
+  holder: string;
+  note: string;
+  active?: boolean;
+  sortOrder?: number;
+}
+
+export type TopupStatus = "AWAITING_RECEIPT" | "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+
+export interface Topup {
+  topupNo: string;
+  amount: number;
+  credited: number | null;
+  status: TopupStatus;
+  card: { bank: CardBank; bankLabel: string; number: string; holder: string };
+  hasReceipt: boolean;
+  rejectReason: string | null;
+  createdAt: number | null;
+  decidedAt: number | null;
+}
+
+export interface BalanceTx {
+  id: number;
+  delta: number;
+  balanceAfter: number;
+  kind: "topup" | "purchase" | "refund" | "admin";
+  ref: string | null;
+  note: string | null;
+  createdAt: number | null;
+}
+
+export interface WalletData {
+  balance: number;
+  cards: PaymentCard[];
+  topups: Topup[];
+  transactions: BalanceTx[];
+}
+
+/** Admin panel: to'ldirish so'rovi (foydalanuvchi bilan) */
+export interface TopupRecord extends Topup {
+  userId: string;
+  username: string | null;
+  firstName: string;
+  decidedBy: string | null;
 }

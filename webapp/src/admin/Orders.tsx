@@ -25,6 +25,7 @@ const STATUS_FILTERS: { id: OrderStatus | "ALL"; label: string }[] = [
   { id: "SUCCESS", label: "✅ Muvaffaqiyatli" },
   { id: "FAILED", label: "❌ Xato" },
   { id: "CANCELLED", label: "🚫 Bekor" },
+  { id: "REFUNDED", label: "↩️ Qaytarilgan" },
 ];
 
 function range(preset: Preset, from: string, to: string): { start: Date; end: Date } | null {
@@ -102,11 +103,13 @@ export function AdminOrdersPage() {
     return { count: filtered.length, revenue: paid.reduce((a, o) => a + o.amount, 0) };
   }, [filtered]);
 
-  async function runAction(o: OrderRecord, action: "retry" | "mark-success") {
+  async function runAction(o: OrderRecord, action: "retry" | "mark-success" | "refund") {
     const msg =
       action === "retry"
         ? `#${o.orderNo} buyurtmani FastDonate ga qayta yuborasizmi?`
-        : `#${o.orderNo} ni qo‘lda "muvaffaqiyatli" deb belgilaysizmi? (Diamond qo‘lda yuborilgan bo‘lsa)`;
+        : action === "refund"
+          ? `#${o.orderNo} — ${formatSum(o.amount)} mijoz balansiga qaytarilsinmi? (Buyurtma yopiladi, qayta yuborib bo‘lmaydi)`
+          : `#${o.orderNo} ni qo‘lda "muvaffaqiyatli" deb belgilaysizmi? (Diamond qo‘lda yuborilgan bo‘lsa)`;
     if (!window.confirm(msg)) return;
     setActionBusy(o.id);
     try {
@@ -263,6 +266,16 @@ export function AdminOrdersPage() {
                           title="Qo‘lda bajarildi"
                         >
                           <CheckCheck size={14} /> Bajarildi
+                        </button>
+                      )}
+                      {o.status === "FAILED" && o.paymentStatus === "PAID" && o.paymentProvider === "balance" && (
+                        <button
+                          className="btn-ghost px-2.5 py-1.5 text-xs"
+                          onClick={() => runAction(o, "refund")}
+                          disabled={actionBusy === o.id}
+                          title="Pulni mijoz balansiga qaytarish"
+                        >
+                          ↩️ Balansga
                         </button>
                       )}
                     </div>

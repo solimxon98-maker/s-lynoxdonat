@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /** DEMO: lib/adminData.ts o'rniga — brauzer ichidagi demo bazadan o'qiydi */
-import type { OrderRecord, Product, UserRecord } from "../lib/types";
+import type { CardBank, OrderRecord, PaymentCard, Product, TopupRecord, UserRecord } from "../lib/types";
 import { demoDb, Timestamp } from "./store";
 import { demoAuth } from "./supabaseMock";
 
@@ -85,6 +85,9 @@ export async function dashboardStats(dayStart: Date) {
     success: all.filter((o) => o.status === "SUCCESS").length,
     pending: all.filter((o) => ["AWAITING_PAYMENT", "PAID", "PROCESSING"].includes(o.status)).length,
     failed: all.filter((o) => o.status === "FAILED").length,
+    pendingTopups: demoDb.list("topups").filter(([, t]) => t.status === "PENDING").length,
+    todayTopups: demoDb.list("topups").filter(([, t]) => t.status === "APPROVED" && (t.decidedAt?.toMillis?.() ?? 0) >= dayStart.getTime()).reduce((a, [, t]) => a + (t.credited ?? 0), 0),
+    totalBalance: demoDb.list("users").reduce((a, [, u]) => a + (u.balance ?? 0), 0),
   };
 }
 export async function providerStatus() {
@@ -106,4 +109,35 @@ export async function listUsers(limit = 2000): Promise<UserRecord[]> {
 }
 export async function setUserBlocked(id: string, blocked: boolean) {
   demoDb.update("users", `tg_${id}`, { blocked });
+}
+
+const BANK: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
+export type CardInput = { bank: CardBank; number: string; holder: string; note: string; active: boolean; sortOrder: number };
+export async function listCards(): Promise<PaymentCard[]> {
+  return demoDb.list("cards").map(([id, c]) => ({ id, ...c, bankLabel: BANK[c.bank] })).sort((a: any, b: any) => a.sortOrder - b.sortOrder) as PaymentCard[];
+}
+export async function createCard(c: CardInput) {
+  demoDb.set("cards", demoDb.newId(), { ...c });
+}
+export async function updateCard(id: string, c: CardInput) {
+  demoDb.update("cards", id, { ...c });
+}
+export async function deleteCard(id: string) {
+  demoDb.delete("cards", id);
+}
+export async function listTopups(status: "PENDING" | "ALL"): Promise<TopupRecord[]> {
+  return demoDb
+    .list("topups")
+    .map(([, t]) => t)
+    .filter((t) => status === "ALL" || t.status === "PENDING" || t.status === "AWAITING_RECEIPT")
+    .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+    .map((t) => {
+      const u = demoDb.get("users", t.uid) ?? {};
+      return {
+        topupNo: t.topupNo, amount: t.amount, credited: t.credited ?? null, status: t.status,
+        card: { ...t.card, bankLabel: BANK[t.card.bank] }, hasReceipt: !!t.receipt, rejectReason: t.rejectReason ?? null,
+        createdAt: t.createdAt.toMillis(), decidedAt: t.decidedAt?.toMillis?.() ?? null, decidedBy: t.decidedBy ?? null,
+        userId: String(t.uid).replace(/^tg_/, ""), username: u.username ?? null, firstName: u.firstName ?? "",
+      };
+    });
 }

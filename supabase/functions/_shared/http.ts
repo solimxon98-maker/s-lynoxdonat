@@ -38,10 +38,10 @@ export function errorResponse(req: Request, e: unknown): Response {
   return json(req, 500, { ok: false, code: "INTERNAL", message: "Serverda xatolik yuz berdi." });
 }
 
-export async function readJson(req: Request): Promise<Record<string, unknown>> {
+export async function readJson(req: Request, maxChars = 100_000): Promise<Record<string, unknown>> {
   if (req.method === "GET") return {};
   const text = await req.text();
-  if (text.length > 100_000) throw badRequest("TOO_LARGE", "So'rov juda katta");
+  if (text.length > maxChars) throw badRequest("TOO_LARGE", "So'rov juda katta");
   if (!text) return {};
   try {
     const v = JSON.parse(text);

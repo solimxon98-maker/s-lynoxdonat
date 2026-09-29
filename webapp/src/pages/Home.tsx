@@ -1,3 +1,4 @@
+import { formatSum } from "../lib/format";
 import { Bot, ChevronRight, Clock3, Gem, ShieldCheck, Zap } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Logo } from "../components/Logo";
@@ -34,6 +35,11 @@ export function HomePage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {profile && (
+            <Link to="/wallet" className="chip border-emerald-400/30 bg-emerald-400/10 text-emerald-300">
+              💼 {formatSum(profile.balance ?? 0)}
+            </Link>
+          )}
           {profile && profile.tier !== "oddiy" && (
             <span className={`chip ${TIER_META[profile.tier].chip}`}>
               {TIER_META[profile.tier].emoji} {TIER_META[profile.tier].label}

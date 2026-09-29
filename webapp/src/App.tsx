@@ -9,6 +9,7 @@ import { OrderDetailPage } from "./pages/OrderDetail";
 import { OrdersPage } from "./pages/Orders";
 import { PayPage } from "./pages/Pay";
 import { ProfilePage } from "./pages/Profile";
+import { WalletPage } from "./pages/Wallet";
 
 // Admin panel alohida chunk sifatida yuklanadi (Telegram foydalanuvchilariga yuklanmaydi)
 const AdminLayout = lazy(() => import("./admin/AdminLayout").then((m) => ({ default: m.AdminLayout })));
@@ -17,6 +18,8 @@ const DashboardPage = lazy(() => import("./admin/Dashboard").then((m) => ({ defa
 const ProductsPage = lazy(() => import("./admin/Products").then((m) => ({ default: m.ProductsPage })));
 const AdminOrdersPage = lazy(() => import("./admin/Orders").then((m) => ({ default: m.AdminOrdersPage })));
 const AdminUsersPage = lazy(() => import("./admin/Users").then((m) => ({ default: m.AdminUsersPage })));
+const TopupsPage = lazy(() => import("./admin/Topups").then((m) => ({ default: m.TopupsPage })));
+const CardsPage = lazy(() => import("./admin/Cards").then((m) => ({ default: m.CardsPage })));
 const FastDonatePage = lazy(() => import("./admin/FastDonate").then((m) => ({ default: m.FastDonatePage })));
 
 function AdminFallback() {
@@ -61,6 +64,8 @@ export default function App() {
         <Route path="products" element={<ProductsPage />} />
         <Route path="orders" element={<AdminOrdersPage />} />
         <Route path="users" element={<AdminUsersPage />} />
+        <Route path="topups" element={<TopupsPage />} />
+        <Route path="cards" element={<CardsPage />} />
         <Route path="fastdonate" element={<FastDonatePage />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>
@@ -78,6 +83,7 @@ export default function App() {
         <Route path="orders" element={<OrdersPage />} />
         <Route path="orders/:orderId" element={<OrderDetailPage />} />
         <Route path="profile" element={<ProfilePage />} />
+        <Route path="wallet" element={<WalletPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -31,8 +31,9 @@ async function pollOrders() {
   for (const o of stuckPaid ?? []) await processPaidOrder(o.order_no as string);
 
   const expired = await rpc<number>("expire_unpaid_orders", {});
-  const counts = { processing: processing?.length ?? 0, stuckPaid: stuckPaid?.length ?? 0, expired };
-  if (counts.processing || counts.stuckPaid || counts.expired) await writeLog("info", "cron_poll", counts);
+  const expiredTopups = await rpc<number>("expire_topups", {});
+  const counts = { processing: processing?.length ?? 0, stuckPaid: stuckPaid?.length ?? 0, expired, expiredTopups };
+  if (counts.processing || counts.stuckPaid || counts.expired || counts.expiredTopups) await writeLog("info", "cron_poll", counts);
   return counts;
 }
 
