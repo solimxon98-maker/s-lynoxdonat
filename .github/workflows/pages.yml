@@ -1,5 +1,5 @@
 # Web App + Admin panel -> GitHub Pages
-# Deploy: har push da avtomatik
+# Deploy: har push da avtomatik (Pages yoqilgan)
 # Kerakli repo Variables (Settings → Secrets and variables → Actions → Variables):
 #   SUPABASE_PROJECT_REF, SUPABASE_ANON_KEY  (ixtiyoriy — standart qiymatlar shu faylda, ikkalasi ham ommaviy)
 name: Web App (GitHub Pages)
