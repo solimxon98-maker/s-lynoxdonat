@@ -42,7 +42,7 @@ export function effectiveTier(tier: Tier | null | undefined, until: string | nul
   return until && new Date(until).getTime() > now ? tier : "oddiy";
 }
 
-export const BANK_LABEL: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
+export const BANK_LABEL: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", uzum: "Uzum", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
 
 /** 9860 1234 5678 9012 */
 export function formatCardNumber(n: string): string {

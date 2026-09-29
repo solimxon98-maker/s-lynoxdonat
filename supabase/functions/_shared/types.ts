@@ -97,7 +97,7 @@ export interface Payment {
 }
 
 export type TopupStatus = "AWAITING_RECEIPT" | "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
-export type CardBank = "humo" | "uzcard" | "visa" | "mastercard" | "other";
+export type CardBank = "humo" | "uzcard" | "uzum" | "visa" | "mastercard" | "other";
 
 export interface PaymentCard {
   id: string;

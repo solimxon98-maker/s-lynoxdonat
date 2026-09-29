@@ -397,7 +397,7 @@ function payFromBalance(uid: string, orderNo: string) {
   void fulfill(orderNo);
   return { result: "paid", balance: bal, need: 0 };
 }
-const BANK: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
+const BANK: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", uzum: "Uzum", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
 const publicCard = (id: string, c: any) => ({ id, bank: c.bank, bankLabel: BANK[c.bank], number: c.number, holder: c.holder, note: c.note });
 function publicTopup(t: any) {
   return {

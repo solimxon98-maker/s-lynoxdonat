@@ -111,7 +111,7 @@ export async function setUserBlocked(id: string, blocked: boolean) {
   demoDb.update("users", `tg_${id}`, { blocked });
 }
 
-const BANK: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
+const BANK: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", uzum: "Uzum", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
 export type CardInput = { bank: CardBank; number: string; holder: string; note: string; active: boolean; sortOrder: number };
 export async function listCards(): Promise<PaymentCard[]> {
   return demoDb.list("cards").map(([id, c]) => ({ id, ...c, bankLabel: BANK[c.bank] })).sort((a: any, b: any) => a.sortOrder - b.sortOrder) as PaymentCard[];

@@ -97,7 +97,7 @@ export interface PlayerCheck {
   mock: boolean;
 }
 
-export type CardBank = "humo" | "uzcard" | "visa" | "mastercard" | "other";
+export type CardBank = "humo" | "uzcard" | "uzum" | "visa" | "mastercard" | "other";
 
 export interface PaymentCard {
   id: string;

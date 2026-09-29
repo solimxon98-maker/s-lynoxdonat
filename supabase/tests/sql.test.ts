@@ -16,7 +16,7 @@ await db.exec(`
   grant usage on schema public to anon, authenticated, service_role;
 `);
 try { await db.exec(fs.readFileSync(`${R}/migrations/20260929000001_init.sql`, "utf8")); } catch (e) { console.error("MIGRATION ERROR:", e.message, "pos", e.position, e.hint ?? ""); const s = fs.readFileSync(`${R}/migrations/20260929000001_init.sql`, "utf8"); if (e.position) console.error(s.slice(Math.max(0, +e.position - 200), +e.position + 100)); process.exit(1); }
-try { await db.exec(fs.readFileSync(`${R}/migrations/20260929000004_wallet.sql`, "utf8")); } catch (e) { console.error("WALLET MIGRATION ERROR:", e.message); process.exit(1); }
+try { await db.exec(fs.readFileSync(`${R}/migrations/20260929000004_wallet.sql`, "utf8")); await db.exec(fs.readFileSync(`${R}/migrations/20260929000006_uzum_card.sql`, "utf8")); } catch (e) { console.error("WALLET MIGRATION ERROR:", e.message); process.exit(1); }
 await db.exec(`grant all on all tables in schema public to service_role; grant all on all sequences in schema public to service_role; grant execute on all functions in schema public to service_role;`);
 await db.exec(fs.readFileSync(`${R}/seed.sql`, "utf8"));
 ok((await one("select count(*)::int c from products")).c === 21, "21 ta paket yuklandi");
@@ -99,7 +99,7 @@ ok((await one("select expire_unpaid_orders() r")).r > 0, "24 soatlik to'lanmagan
 
 
 // ---- BALANS ----
-await db.query("insert into payment_cards(bank, number, holder) values ('humo','9860123412341234','SOLIM X'),('uzcard','8600123412341234','SOLIM X')");
+await db.query("insert into payment_cards(bank, number, holder) values ('humo','9860123412341234','SOLIM X'),('uzcard','8600123412341234','SOLIM X'),('uzum','4916123412341234','SOLIM X')");
 const card = (await one("select id from payment_cards where bank='humo'")).id;
 await db.query("select * from upsert_tg_user(700,'w','Wallet',null,null,null)");
 ok(/INVALID_AMOUNT/.test(await err("select create_topup(700, 500, $1, 'tk0')", [card])), "to'ldirish: 1000 dan kam summa rad");

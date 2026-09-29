@@ -110,7 +110,7 @@ export const TOPUP_STATUS: Record<TopupStatus, StatusMeta> = {
   EXPIRED: { label: "Muddati o‘tdi", short: "Yopildi", emoji: "⌛", tone: "slate" },
 };
 
-export const BANK_LABEL: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
+export const BANK_LABEL: Record<string, string> = { humo: "Humo", uzcard: "Uzcard", uzum: "Uzum", visa: "Visa", mastercard: "Mastercard", other: "Karta" };
 
 /** 9860 1234 5678 9012 */
 export function formatCard(n: string): string {

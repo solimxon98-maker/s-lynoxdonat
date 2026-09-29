@@ -9,6 +9,7 @@ import type { CardBank, PaymentCard } from "../lib/types";
 const BANKS: { id: CardBank; label: string }[] = [
   { id: "humo", label: "Humo" },
   { id: "uzcard", label: "Uzcard" },
+  { id: "uzum", label: "Uzum" },
   { id: "visa", label: "Visa" },
   { id: "mastercard", label: "Mastercard" },
   { id: "other", label: "Boshqa" },
