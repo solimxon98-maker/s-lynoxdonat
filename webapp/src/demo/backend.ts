@@ -89,7 +89,7 @@ export function ensureDemoUser() {
   });
 }
 
-export const DEMO_REF_LINK = `https://t.me/sizning_botingiz?start=ref_${DEMO_TG_ID}`;
+export const DEMO_REF_LINK = `https://t.me/SLynoxDonat_bot?start=ref_${DEMO_TG_ID}`;
 
 function publicUser(u: any) {
   const t = effectiveTier(u);

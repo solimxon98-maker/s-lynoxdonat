@@ -7,7 +7,7 @@
 #   APP_SECRET              istalgan uzun tasodifiy satr (40+ belgi) — sessiya/webhook/cron kalitlari shundan hosil qilinadi
 #   (keyin) FASTDONATE_API_URL / FASTDONATE_API_KEY / FASTDONATE_SECRET — yoki admin paneldan
 #
-# Repo Variables:
+# Repo Variables (ixtiyoriy — berilmasa shu fayldagi standart qiymatlar ishlatiladi):
 #   SUPABASE_PROJECT_REF    masalan: abcdefghijklmnopqrst
 #   ADMIN_TELEGRAM_IDS      admin Telegram ID lari (vergul bilan)
 #   TELEGRAM_BOT_USERNAME   bot username (@ siz)
@@ -32,7 +32,7 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF || 'ndhrbyekpluzcfcfjcbc' }}
       WEBAPP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
       ALLOWED_ORIGIN: https://${{ github.repository_owner }}.github.io
     steps:
@@ -77,8 +77,8 @@ jobs:
           ALLOWED_ORIGIN=$ALLOWED_ORIGIN
           TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_WEBHOOK_SECRET=$TELEGRAM_WEBHOOK_SECRET
-          TELEGRAM_BOT_USERNAME=${{ vars.TELEGRAM_BOT_USERNAME }}
-          ADMIN_TELEGRAM_IDS=${{ vars.ADMIN_TELEGRAM_IDS }}
+          TELEGRAM_BOT_USERNAME=${{ vars.TELEGRAM_BOT_USERNAME || 'SLynoxDonat_bot' }}
+          ADMIN_TELEGRAM_IDS=${{ vars.ADMIN_TELEGRAM_IDS || '6040509902' }}
           WEBAPP_URL=$WEBAPP_URL
           SUPPORT_USERNAME=${{ vars.SUPPORT_USERNAME || 'Solim_9804' }}
           PAYMENT_PROVIDER=${{ vars.PAYMENT_PROVIDER || 'mock' }}
@@ -97,7 +97,7 @@ jobs:
       - name: Telegram bot (webhook, menyu, buyruqlar)
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          WEBHOOK_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/telegram-bot
+          WEBHOOK_URL: https://${{ vars.SUPABASE_PROJECT_REF || 'ndhrbyekpluzcfcfjcbc' }}.supabase.co/functions/v1/telegram-bot
         run: |
           if [ -z "$TELEGRAM_BOT_TOKEN" ]; then echo "::warning::TELEGRAM_BOT_TOKEN yo'q — bot sozlanmadi"; exit 0; fi
           bash scripts/setup-bot.sh

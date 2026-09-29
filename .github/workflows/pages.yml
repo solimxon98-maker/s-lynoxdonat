@@ -1,6 +1,6 @@
 # Web App + Admin panel -> GitHub Pages
 # Kerakli repo Variables (Settings → Secrets and variables → Actions → Variables):
-#   SUPABASE_PROJECT_REF, SUPABASE_ANON_KEY  (ikkalasi ham ommaviy)
+#   SUPABASE_PROJECT_REF, SUPABASE_ANON_KEY  (ixtiyoriy — standart qiymatlar shu faylda, ikkalasi ham ommaviy)
 name: Web App (GitHub Pages)
 
 on:
@@ -34,11 +34,11 @@ jobs:
       - run: npm ci
       - name: Build
         env:
-          VITE_SUPABASE_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co
-          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: https://${{ vars.SUPABASE_PROJECT_REF || 'ndhrbyekpluzcfcfjcbc' }}.supabase.co
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kaHJieWVrcGx1emNmY2ZqY2JjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2NzE0NzUsImV4cCI6MjEwNjI0NzQ3NX0.C820Fcr3ZqY4hBmnchFFKdX_hyxV7mKpyn8c_OeLDEI' }}
           VITE_BASE: /${{ github.event.repository.name }}/
         run: |
-          test -n "${{ vars.SUPABASE_PROJECT_REF }}" || (echo "::error::SUPABASE_PROJECT_REF variable kiritilmagan" && exit 1)
+          test -n "${{ vars.SUPABASE_PROJECT_REF || 'ndhrbyekpluzcfcfjcbc' }}" || (echo "::error::SUPABASE_PROJECT_REF variable kiritilmagan" && exit 1)
           npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
