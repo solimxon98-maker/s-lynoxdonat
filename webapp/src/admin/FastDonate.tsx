@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Alert, PageHeader, Spinner } from "../components/ui";
 import { api, errorMessage } from "../lib/api";
 import { formatDateTime, formatNumber } from "../lib/format";
+import { listProducts } from "../lib/adminData";
+import type { Product } from "../lib/types";
 
 interface Settings {
   mockMode: boolean;
@@ -104,8 +106,8 @@ export function FastDonatePage() {
       {settings?.mockMode && (
         <div className="mb-4">
           <Alert tone="amber">
-            🧪 <b>MOCK_MODE=true</b> — player tekshirish, to‘lov va donat buyurtmalari simulyatsiya qilinmoqda. Haqiqiy API uchun
-            Supabase Edge Function secrets'da MOCK_MODE=false qiling.
+            🧪 <b>Test rejim yoqilgan</b> — mijoz buyurtmalari FastDonate'ga yuborilmaydi (olmos ketmaydi). Nik tekshiruvi esa haqiqiy.
+            Pastdagi «Sinov xaridi» muvaffaqiyatli o‘tgach, test rejimi o‘chiriladi.
           </Alert>
         </div>
       )}
@@ -166,7 +168,7 @@ export function FastDonatePage() {
       {/* API sozlamalari */}
       <form onSubmit={save} className="card space-y-4 p-5">
         <div className="flex items-center justify-between">
-          <p className="font-display text-sm font-bold text-white">API ma'lumotlari</p>
+          <p className="font-display text-sm font-bold text-white">FastDonate akkaunti</p>
           {settings && (
             <span className="chip border-white/10 bg-white/5 text-slate-400">
               Manba: {settings.source === "admin" ? "admin panel" : settings.source === "env" ? ".env" : "kiritilmagan"}
@@ -175,48 +177,139 @@ export function FastDonatePage() {
         </div>
 
         <div>
-          <label className="label">API URL</label>
+          <label className="label">API manzili (odatda o‘zgartirilmaydi)</label>
           <div className="relative">
             <Link2 size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input className="input pl-11" placeholder="https://..." value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} />
+            <input className="input pl-11" placeholder="https://api.fastdonate.su" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} />
           </div>
         </div>
         <div>
-          <label className="label">API Key {settings?.hasApiKey && <span className="normal-case text-slate-500">— joriy: {settings.apiKeyMasked}</span>}</label>
+          <label className="label">Login (fastdonate.su) {settings?.hasApiKey && <span className="normal-case text-slate-500">— joriy: {settings.apiKeyMasked}</span>}</label>
           <div className="relative">
             <KeyRound size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               className="input pl-11"
-              type="password"
-              autoComplete="new-password"
-              placeholder={settings?.hasApiKey ? "O‘zgartirish uchun yangi qiymat kiriting" : "API key"}
+              type="text"
+              autoComplete="off"
+              placeholder={settings?.hasApiKey ? "O‘zgartirish uchun yangi qiymat kiriting" : "FastDonate login"}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
             />
           </div>
         </div>
         <div>
-          <label className="label">Secret {settings?.hasSecret && <span className="normal-case text-slate-500">— joriy: {settings.secretMasked}</span>}</label>
+          <label className="label">Parol (fastdonate.su) {settings?.hasSecret && <span className="normal-case text-slate-500">— joriy: {settings.secretMasked}</span>}</label>
           <div className="relative">
             <KeyRound size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               className="input pl-11"
               type="password"
               autoComplete="new-password"
-              placeholder={settings?.hasSecret ? "O‘zgartirish uchun yangi qiymat kiriting" : "Secret"}
+              placeholder={settings?.hasSecret ? "O‘zgartirish uchun yangi qiymat kiriting" : "FastDonate parol"}
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
             />
           </div>
         </div>
         <p className="text-xs text-slate-500">
-          Bo‘sh qoldirilgan maydon o‘zgarmaydi. Qiymatni o‘chirish uchun «-» kiriting. Kalitlar faqat serverda saqlanadi va brauzerga qaytarilmaydi.
+          Bo‘sh qoldirilgan maydon o‘zgarmaydi. O‘chirish uchun «-» kiriting. Login va parol faqat serverda saqlanadi, brauzerga qaytarilmaydi.
+          Saqlagach «Ulanishni tekshirish» ni bosing.
         </p>
         {saved && <Alert tone="emerald">✅ Saqlandi</Alert>}
         <button className="btn-primary" disabled={saving}>
           {saving ? <Spinner size={16} /> : <Save size={16} />} Saqlash
         </button>
       </form>
+
+      <TestPurchase />
+    </div>
+  );
+}
+
+/** Haqiqiy sinov xaridi: FastDonate balansidan yechiladi, bizning buyurtma/balansga ta'sir qilmaydi */
+function TestPurchase() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productId, setProductId] = useState("");
+  const [mlbbId, setMlbbId] = useState("");
+  const [serverId, setServerId] = useState("");
+  const [nick, setNick] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [out, setOut] = useState<unknown>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    listProducts()
+      .then((ps) => {
+        const list = ps.filter((p) => p.active && p.providerSku);
+        setProducts(list);
+        const cheapest = [...list].sort((a, b) => a.price - b.price)[0];
+        if (cheapest) setProductId(cheapest.id);
+      })
+      .catch((e) => setErr(errorMessage(e)));
+  }, []);
+
+  async function run(kind: "check" | "prices" | "orders" | "buy") {
+    setBusy(kind);
+    setErr(null);
+    try {
+      if (kind === "check") {
+        const r = await api<{ found: boolean; nickname: string | null }>("/admin/fastdonate/check", { body: { mlbbId, serverId }, admin: true });
+        setNick(r.found ? r.nickname : "");
+        return;
+      }
+      if (kind === "prices") return setOut(await api("/admin/fastdonate/prices", { admin: true }));
+      if (kind === "orders") return setOut(await api("/admin/fastdonate/orders", { admin: true }));
+      const p = products.find((x) => x.id === productId);
+      if (!p || !nick) return;
+      if (!window.confirm(`HAQIQIY XARID!\n\n${p.name} → ${nick} (${mlbbId} / ${serverId})\nFastDonate balansingizdan pul yechiladi.\n\nDavom etasizmi?`)) return;
+      setOut(await api("/admin/fastdonate/test-order", { body: { productId, mlbbId, serverId, confirm: true }, admin: true }));
+    } catch (e) {
+      setErr(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="card mt-5 space-y-4 p-5">
+      <div>
+        <p className="font-display text-sm font-bold text-white">🧪 Sinov xaridi (haqiqiy)</p>
+        <p className="mt-1 text-xs text-slate-400">
+          O‘zingizning akkauntingizga eng arzon paketni oling. FastDonate balansingizdan yechiladi. Mijozlar balansiga ta'sir qilmaydi.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <input className="input" inputMode="numeric" placeholder="MLBB ID" value={mlbbId} onChange={(e) => { setMlbbId(e.target.value.replace(/\D/g, "")); setNick(null); }} />
+        <input className="input" inputMode="numeric" placeholder="Server" value={serverId} onChange={(e) => { setServerId(e.target.value.replace(/\D/g, "")); setNick(null); }} />
+        <button className="btn-ghost" onClick={() => run("check")} disabled={!!busy || !mlbbId || !serverId}>
+          {busy === "check" ? <Spinner size={16} /> : null} Nikni tekshirish
+        </button>
+      </div>
+      {nick !== null && (nick ? <Alert tone="emerald">✅ Akkaunt: <b>{nick}</b></Alert> : <Alert>Akkaunt topilmadi</Alert>)}
+      <select className="input" value={productId} onChange={(e) => setProductId(e.target.value)}>
+        {products.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name} — FastDonate kod: {p.providerSku}
+          </option>
+        ))}
+      </select>
+      <div className="flex flex-wrap gap-2">
+        <button className="btn-primary" onClick={() => run("buy")} disabled={!!busy || !nick || !productId}>
+          {busy === "buy" ? <Spinner size={16} /> : null} Sinov xaridini qilish
+        </button>
+        <button className="btn-ghost" onClick={() => run("orders")} disabled={!!busy}>
+          {busy === "orders" ? <Spinner size={16} /> : null} FastDonate buyurtmalarim
+        </button>
+        <button className="btn-ghost" onClick={() => run("prices")} disabled={!!busy}>
+          {busy === "prices" ? <Spinner size={16} /> : null} Mening narxlarim
+        </button>
+      </div>
+      {err && <Alert>{err}</Alert>}
+      {out !== null && (
+        <pre className="max-h-96 overflow-auto rounded-2xl bg-ink-950/80 p-4 text-[11px] leading-relaxed text-slate-300 ring-1 ring-white/5">
+          {JSON.stringify(out, null, 2)}
+        </pre>
+      )}
     </div>
   );
 }

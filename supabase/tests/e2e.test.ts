@@ -230,7 +230,10 @@ ok(fd.status === 200 && fd.data.mockMode === true, "admin: FastDonate sozlamalar
 await call("PUT", "/admin/fastdonate", { apiUrl: "https://api.example.com", apiKey: "SUPERSECRETKEY123" }, { authorization: "Bearer admin-token" });
 const fd2 = await call("GET", "/admin/fastdonate", undefined, { authorization: "Bearer admin-token" });
 ok(fd2.data.apiKeyMasked.startsWith("SUPE") && !JSON.stringify(fd2.data).includes("SUPERSECRETKEY123"), "admin: API key faqat maskalangan holda qaytadi");
-ok((await call("POST", "/admin/fastdonate/test", {}, { authorization: "Bearer admin-token" })).data.connected === true, "admin: ulanish testi");
+const ft = (await call("POST", "/admin/fastdonate/test", {}, { authorization: "Bearer admin-token" })).data;
+ok(ft.connected === false && ft.message.includes("NOT_CONFIGURED"), "admin: ulanish testi — parol kiritilmagan deb aytadi");
+ok((await call("POST", "/admin/fastdonate/test-order", { productId: p86.id, mlbbId: "123456789", serverId: "1" })).status === 401, "sinov xaridi: tokensiz — 401");
+ok((await call("POST", "/admin/fastdonate/test-order", { productId: p86.id, mlbbId: "123456789", serverId: "1" }, ADMIN_H)).status === 400, "sinov xaridi: tasdiqsiz — 400");
 
 // ---- CRON ----
 const cronBad = await cron(new Request("https://x/functions/v1/cron", { method: "POST", headers: { "x-cron-secret": "no" } }));

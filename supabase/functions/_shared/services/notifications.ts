@@ -33,7 +33,9 @@ export async function notifyAdminsFailure(o: Order, code: string, message: strin
     `MLBB: <code>${esc(o.mlbb_id)}</code> (${esc(o.server_id)})`,
     `💎 ${esc(productLabel(o.product))} — ${esc(formatSum(o.amount))}`, "",
     `Xato: <code>${esc(code)}</code>`, esc(message), "",
-    "Admin panel → Buyurtmalar orqali tekshirib, qayta yuborishingiz mumkin.",
+    code === "TIMEOUT" || code === "NETWORK"
+      ? "⚠️ <b>FastDonate'da buyurtma o‘tgan bo‘lishi mumkin!</b> «Qayta yuborish»dan oldin fastdonate.su → buyurtmalar tarixida tekshiring, aks holda olmos ikki marta ketadi."
+      : "Admin panel → Buyurtmalar orqali tekshirib, qayta yuborishingiz yoki pulni balansga qaytarishingiz mumkin.",
   ].join("\n"));
 }
 

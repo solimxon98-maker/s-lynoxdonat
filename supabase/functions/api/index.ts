@@ -13,7 +13,9 @@ import {
   badRequest, corsHeaders, errorResponse, forbidden, HttpError, json, notFound, readJson, unauthorized,
 } from "../_shared/http.ts";
 import { writeLog } from "../_shared/logger.ts";
-import { getDonateProvider, ProviderError } from "../_shared/providers/donate/index.ts";
+import { ProviderError } from "../_shared/providers/donate/index.ts";
+import { FastDonateService, parseSku } from "../_shared/providers/donate/FastDonateService.ts";
+import { checkPlayerViaFastDonate } from "../_shared/providers/donate/playerCheck.ts";
 import { getPaymentProviderById } from "../_shared/providers/payment/index.ts";
 import { issueSession, verifySession } from "../_shared/session.ts";
 import { validateInitData } from "../_shared/telegramAuth.ts";
@@ -251,7 +253,8 @@ on("PUT", /^\/admin\/fastdonate$/, async ({ req, body }) => {
 
 on("POST", /^\/admin\/fastdonate\/test$/, async ({ req }) => {
   await requireAdmin(req);
-  const provider = getDonateProvider();
+  // Test rejimda ham haqiqiy akkaunt tekshiriladi (faqat o'qish)
+  const provider = new FastDonateService();
   const conn = await provider.testConnection();
   let balance: { balance: number; currency: string } | null = null;
   let balanceError: string | null = null;
@@ -270,6 +273,47 @@ on("POST", /^\/admin\/fastdonate\/test$/, async ({ req }) => {
   };
   await mergeSetting("provider_status", { ...payload, checkedAt: new Date().toISOString() });
   return { ...payload, checkedAt: Date.now(), threshold };
+});
+
+/** Sinov: nik tekshirish */
+on("POST", /^\/admin\/fastdonate\/check$/, async ({ req, body }) => {
+  await requireAdmin(req);
+  const { mlbbId, serverId } = validatePlayerInput(body.mlbbId, body.serverId);
+  return await checkPlayerViaFastDonate(mlbbId, serverId);
+});
+
+/** FastDonate: siz uchun narxlar va so'nggi buyurtmalar (xom) */
+on("GET", /^\/admin\/fastdonate\/prices$/, async ({ req }) => {
+  await requireAdmin(req);
+  return { prices: await new FastDonateService().priceList() };
+});
+on("GET", /^\/admin\/fastdonate\/orders$/, async ({ req }) => {
+  await requireAdmin(req);
+  return { orders: await new FastDonateService().recentOrders(10) };
+});
+
+/**
+ * Sinov xaridi — HAQIQIY: FastDonate balansingizdan pul yechiladi, olmos ko'rsatilgan akkauntga ketadi.
+ * Bizning buyurtma/balansga ta'sir qilmaydi. Xom javob logs ga yoziladi.
+ */
+on("POST", /^\/admin\/fastdonate\/test-order$/, async ({ req, body }) => {
+  const adminId = await requireAdmin(req);
+  const { mlbbId, serverId } = validatePlayerInput(body.mlbbId, body.serverId);
+  if (body.confirm !== true) throw badRequest("CONFIRM_REQUIRED", "Tasdiqlang");
+  const { data: product } = await db().from("products").select("name,provider_sku").eq("id", String(body.productId ?? "")).maybeSingle();
+  if (!product) throw notFound("Paket topilmadi");
+  const products = parseSku(product.provider_sku as string);
+  if (!products.length) throw badRequest("NO_SKU", "Bu paketga FastDonate kodi berilmagan");
+  const svc = new FastDonateService();
+  try {
+    const r = await svc.buyRaw(products, mlbbId, serverId);
+    await writeLog("info", "fastdonate_buy_response", { adminId, test: true, product: product.name, products, mlbbId, serverId, response: r.body });
+    return { ok: true, sentAt: r.at, request: { products, user_id: Number(mlbbId), server_id: Number(serverId) }, response: r.body };
+  } catch (e) {
+    const err = e instanceof ProviderError ? { code: e.code, message: e.message, details: e.details } : { code: "UNKNOWN", message: String(e) };
+    await writeLog("error", "fastdonate_buy_response", { adminId, test: true, product: product.name, products, mlbbId, serverId, error: err });
+    return { ok: false, error: err };
+  }
 });
 
 on("POST", /^\/admin\/users\/(\d{1,20})\/tier$/, async ({ req, params, body }) => {

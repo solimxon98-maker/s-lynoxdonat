@@ -1,177 +1,232 @@
 import { config } from "../../config.ts";
-import { FastDonateCredentials, getFastDonateCredentials } from "../../services/settings.ts";
-import {
-  BalanceResult,
-  CheckPlayerInput,
-  CheckPlayerResult,
-  ConnectionResult,
-  CreateOrderInput,
-  DonateProvider,
-  ProviderError,
-  ProviderOrderResult,
-} from "./types.ts";
+import { type FastDonateCredentials, getFastDonateCredentials } from "../../services/settings.ts";
 import { checkPlayerViaFastDonate } from "./playerCheck.ts";
+import {
+  type BalanceResult,
+  type CheckPlayerInput,
+  type CheckPlayerResult,
+  type ConnectionResult,
+  type CreateOrderInput,
+  type DonateProvider,
+  ProviderError,
+  type ProviderOrderResult,
+} from "./types.ts";
 
 /**
- * FastDonateService — fastdonate.su bilan HAQIQIY integratsiya (MOCK_MODE=false).
+ * FastDonateService — fastdonate.su bilan haqiqiy integratsiya.
  *
- * ⚠️ HOLAT: fastdonate.su ning ommaviy API hujjati topilmadi. Endpointlar, autentifikatsiya
- * sxemasi va javob formatlari TAXMIN QILINMAGAN. Shuning uchun quyidagi 4 ta "INTEGRATSIYA NUQTASI"
- * API hujjati kelgunga qadar NOT_IMPLEMENTED xatosini qaytaradi. Buyurtmalar yo'qolmaydi —
- * ular FAILED holatiga o'tadi va admin paneldan "Qayta yuborish" mumkin.
+ * Manba: fastdonate.su saytining o'z (ommaviy) kodi — sayt aynan shu so'rovlarni yuboradi:
+ *   POST {api}/auth/login          { username, password }          -> data.access_token | data.token
+ *   GET  {api}/auth/me             (Bearer)                        -> data.balance (so'm)
+ *   GET  {api}/merchant/check_ml?user_id=&server_id=               -> data.name
+ *   POST {api}/merchant/buy        (Bearer) { products:[{id,count}], user_id:number, server_id:number }
+ *   GET  {api}/profile/orders?page=&limit= (Bearer)                -> data.orders[{id,status,user_id,server_id,diamonds,created_at}], status 1 = bajarildi
+ * Javob formati: { success: true, data } | { success: false, error: { code, message } }
  *
- * Hujjat kelganda faqat shu fayl o'zgaradi:
- *   1. authHeaders()      — API key / secret / imzo qanday yuborilishi
- *   2. checkPlayer()      — player tekshirish endpointi va javobni map qilish
- *   3. createOrder()      — buyurtma yaratish endpointi (externalId = idempotency)
- *   4. checkOrder()       — buyurtma holatini olish
- *   5. getBalance()       — balans endpointi
- *   6. mapError()         — provider xato kodlarini ProviderErrorCode ga moslash
+ * Login/parol: admin panel → FastDonate ("Login" / "Parol") yoki FASTDONATE_API_KEY / FASTDONATE_SECRET.
+ * Paket: products.provider_sku — FastDonate paket ID si, soni bilan: "5" yoki "6x2".
  *
- * Transport qismi (timeout, tarmoq xatolari, JSON parse, HTTP status) tayyor.
+ * ⚠️ /merchant/buy javobida buyurtma ID si bor-yo'qligi hali tasdiqlanmagan — shuning uchun holat
+ * /profile/orders dan (shu MLBB ID + server, xariddan keyingi vaqt) aniqlanadi. Birinchi sinov xaridida
+ * xom javob logs jadvaliga yoziladi (event: fastdonate_buy_response).
  */
+
+const ORDER_WAIT_MS = 20 * 60_000; // shu vaqt ichida "bajarildi" bo'lmasa — FAILED (admin tekshiradi)
+let tokenCache: { token: string; key: string } | null = null;
+
+export interface FdOrderRow {
+  id: number | string;
+  status: number;
+  user_id?: number | string;
+  server_id?: number | string;
+  diamonds?: number;
+  created_at?: string;
+}
+
+export function parseSku(sku: string | null | undefined): { id: number; count: number }[] {
+  const s = String(sku ?? "").trim();
+  if (!s) return [];
+  return s.split(/[,+;]\s*/).map((part) => {
+    const m = /^(\d{1,6})(?:\s*[x×*]\s*(\d{1,2}))?$/i.exec(part.trim());
+    if (!m) throw new ProviderError("INVALID_PRODUCT", `Noto'g'ri FastDonate paket kodi: "${part}". Masalan: 5 yoki 6x2`);
+    return { id: Number(m[1]), count: m[2] ? Number(m[2]) : 1 };
+  });
+}
+
 export class FastDonateService implements DonateProvider {
   readonly name = "fastdonate";
   readonly isMock = false;
 
-  // ------------------------------------------------------------------
-  // Public API
-  // ------------------------------------------------------------------
+  // ------------------------------------------------------------------ API
 
   async checkPlayer(input: CheckPlayerInput): Promise<CheckPlayerResult> {
     return await checkPlayerViaFastDonate(input.mlbbId, input.serverId);
   }
 
-  async createOrder(_input: CreateOrderInput): Promise<ProviderOrderResult> {
-    await this.credentials();
-    // INTEGRATSIYA NUQTASI: buyurtma yaratish.
-    // Majburiy: _input.externalId ni provider tomonidagi idempotency/external ID sifatida yuboring,
-    // shunda qayta urinishda ikki marta diamond yuborilmaydi.
-    throw this.notImplemented("createOrder");
+  async createOrder(input: CreateOrderInput): Promise<ProviderOrderResult> {
+    const products = parseSku(input.providerSku);
+    if (!products.length) {
+      throw new ProviderError("INVALID_PRODUCT", `"${input.productName}" paketiga FastDonate kodi berilmagan (admin panel → Paketlar → Provider SKU)`);
+    }
+    const r = await this.buyRaw(products, input.mlbbId, input.serverId);
+    const d = (r.data ?? {}) as Record<string, unknown>;
+    const fdId = d.order_id ?? d.id ?? (d.order as Record<string, unknown> | undefined)?.id ?? null;
+    return {
+      providerOrderId: `FD:${r.at}:${input.mlbbId}:${input.serverId}${fdId ? `:${fdId}` : ""}`,
+      status: "PROCESSING",
+      message: typeof d.message === "string" ? d.message : "FastDonate buyurtmani qabul qildi",
+      raw: r.body ?? undefined,
+    };
   }
 
-  async checkOrder(_providerOrderId: string): Promise<ProviderOrderResult> {
-    await this.credentials();
-    // INTEGRATSIYA NUQTASI: buyurtma holatini olish.
-    throw this.notImplemented("checkOrder");
+  async checkOrder(providerOrderId: string): Promise<ProviderOrderResult> {
+    const m = /^FD:(\d+):(\d+):(\d+)(?::(.+))?$/.exec(providerOrderId);
+    if (!m) throw new ProviderError("PROVIDER_ERROR", `Noma'lum FastDonate buyurtma ID: ${providerOrderId}`);
+    const at = Number(m[1]);
+    const orders = await this.recentOrders(30);
+    const mine = orders.filter((o) =>
+      String(o.user_id) === m[2] && String(o.server_id) === m[3] && (m[4] ? String(o.id) === m[4] : createdAfter(o.created_at, at))
+    );
+    if (mine.some((o) => Number(o.status) === 1)) {
+      return { providerOrderId, status: "SUCCESS", message: "FastDonate: bajarildi" };
+    }
+    if (Date.now() - at > ORDER_WAIT_MS) {
+      return {
+        providerOrderId,
+        status: "FAILED",
+        message: mine.length
+          ? `FastDonate'da buyurtma bajarilmadi (status: ${mine.map((o) => o.status).join(",")}). Saytda tekshiring.`
+          : "FastDonate'da buyurtma topilmadi. Saytdagi buyurtmalar tarixida tekshiring.",
+      };
+    }
+    return { providerOrderId, status: "PROCESSING", message: "FastDonate: bajarilmoqda" };
   }
 
   async getBalance(): Promise<BalanceResult | null> {
-    await this.credentials();
-    // INTEGRATSIYA NUQTASI: balans. API qo'llamasa `return null;` qiling.
-    throw this.notImplemented("getBalance");
+    const r = await this.authed("GET", "/auth/me");
+    const d = (r.data ?? {}) as Record<string, unknown>;
+    const balance = Number(d.balance);
+    if (!Number.isFinite(balance)) return null;
+    return { balance, currency: "UZS" };
   }
 
   async testConnection(): Promise<ConnectionResult> {
     try {
-      const creds = await this.credentials();
-      const balance = await this.getBalance();
-      return {
-        ok: true,
-        message: balance
-          ? `Ulandi (${creds.source}). Balans: ${balance.balance} ${balance.currency}`
-          : `Ulandi (${creds.source})`,
-      };
+      const me = await this.authed("GET", "/auth/me");
+      const d = (me.data ?? {}) as Record<string, unknown>;
+      return { ok: true, message: `Ulandi: ${d.username ?? "?"} (${d.role ?? "user"}). Balans: ${d.balance ?? "?"} so'm` };
     } catch (e) {
       const err = e instanceof ProviderError ? e : new ProviderError("PROVIDER_ERROR", String(e));
       return { ok: false, message: `${err.code}: ${err.message}` };
     }
   }
 
-  // ------------------------------------------------------------------
-  // Transport (tayyor)
-  // ------------------------------------------------------------------
+  // ------------------------------------------------------------------ admin uchun (sinov)
 
-  /**
-   * FastDonate API ga JSON so'rov yuboradi. Timeout, tarmoq va HTTP xatolarini
-   * ProviderError ga aylantiradi. API hujjati kelganda metodlar shu orqali chaqiriladi:
-   *   const data = await this.request("POST", "/path", { ... });
-   */
-  protected async request<T = Record<string, unknown>>(
-    method: "GET" | "POST",
-    path: string,
-    body?: Record<string, unknown>,
-  ): Promise<T> {
-    const creds = await this.credentials();
-    const url = `${creds.apiUrl}${path.startsWith("/") ? path : `/${path}`}`;
-    const payload = body ? JSON.stringify(body) : undefined;
+  /** Xom xarid — javob o'zgarishsiz qaytadi (admin sinov xaridi uchun) */
+  async buyRaw(products: { id: number; count: number }[], mlbbId: string, serverId: string) {
+    const at = Date.now();
+    const r = await this.authed("POST", "/merchant/buy", { products, user_id: Number(mlbbId), server_id: Number(serverId) });
+    return { at, data: r.data, body: r.body };
+  }
 
+  async recentOrders(limit = 20): Promise<FdOrderRow[]> {
+    const r = await this.authed("GET", `/profile/orders?page=1&limit=${limit}`);
+    const d = (r.data ?? {}) as Record<string, unknown>;
+    return (Array.isArray(d.orders) ? d.orders : Array.isArray(r.data) ? r.data : []) as FdOrderRow[];
+  }
+
+  async priceList(): Promise<{ id: number; name: string; price: number; type: number }[]> {
+    const r = await this.authed("GET", "/merchant/price_list");
+    const d = (r.data ?? {}) as Record<string, unknown>;
+    return (Array.isArray(d.prices) ? d.prices : []) as { id: number; name: string; price: number; type: number }[];
+  }
+
+  // ------------------------------------------------------------------ transport
+
+  private async creds(): Promise<FastDonateCredentials> {
+    const c = await getFastDonateCredentials();
+    if (!c.apiKey || !c.secret) {
+      throw new ProviderError("NOT_CONFIGURED", "FastDonate login yoki paroli kiritilmagan (admin panel → FastDonate)");
+    }
+    return { ...c, apiUrl: c.apiUrl || "https://api.fastdonate.su" };
+  }
+
+  private async login(c: FastDonateCredentials): Promise<string> {
+    const r = await this.send(c.apiUrl, "POST", "/auth/login", { username: c.apiKey, password: c.secret }, null);
+    const d = (r.data ?? {}) as Record<string, unknown>;
+    const token = (d.access_token ?? d.token) as string | undefined;
+    if (!token) throw new ProviderError("NOT_CONFIGURED", "FastDonate login javobida token yo'q");
+    tokenCache = { token, key: `${c.apiUrl}|${c.apiKey}|${c.secret.length}` };
+    return token;
+  }
+
+  /** Login bilan so'rov; 401 bo'lsa bir marta qayta login (tarmoq xatosida qayta yuborilmaydi — xarid ikki marta ketmasin). */
+  private async authed(method: "GET" | "POST", path: string, body?: Record<string, unknown>) {
+    const c = await this.creds();
+    const key = `${c.apiUrl}|${c.apiKey}|${c.secret.length}`;
+    let token = tokenCache?.key === key ? tokenCache.token : await this.login(c);
+    try {
+      return await this.send(c.apiUrl, method, path, body, token);
+    } catch (e) {
+      if (e instanceof ProviderError && e.details.status === 401) {
+        tokenCache = null;
+        token = await this.login(c);
+        return await this.send(c.apiUrl, method, path, body, token);
+      }
+      throw e;
+    }
+  }
+
+  private async send(base: string, method: "GET" | "POST", path: string, body: Record<string, unknown> | undefined, token: string | null) {
+    const url = `${base.replace(/\/+$/, "")}${path}`;
     let res: Response;
     try {
       res = await fetch(url, {
         method,
         headers: {
           Accept: "application/json",
-          ...(payload ? { "Content-Type": "application/json" } : {}),
-          ...this.authHeaders(creds, payload ?? ""),
+          ...(body ? { "Content-Type": "application/json" } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: method === "GET" ? undefined : payload,
+        body: body ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(config.fastdonate.timeoutMs),
       });
     } catch (e) {
-      const name = (e as Error)?.name;
-      if (name === "TimeoutError" || name === "AbortError") {
-        throw new ProviderError("TIMEOUT", `FastDonate ${config.fastdonate.timeoutMs}ms ichida javob bermadi`, { path });
+      const n = (e as Error)?.name;
+      if (n === "TimeoutError" || n === "AbortError") {
+        throw new ProviderError("TIMEOUT", `FastDonate ${config.fastdonate.timeoutMs / 1000} soniyada javob bermadi (${path})`, { path });
       }
       throw new ProviderError("NETWORK", `FastDonate bilan aloqa xatosi: ${(e as Error)?.message}`, { path });
     }
-
     const text = await res.text();
-    let data: unknown = null;
+    let json: Record<string, unknown> | null = null;
     try {
-      data = text ? JSON.parse(text) : null;
+      json = text ? JSON.parse(text) : null;
     } catch {
-      data = { raw: text.slice(0, 500) };
+      throw new ProviderError("PROVIDER_ERROR", `FastDonate tushunarsiz javob (HTTP ${res.status})`, { status: res.status, path });
     }
-
-    if (!res.ok) {
-      throw this.mapError(res.status, data, path);
+    if (!res.ok || json?.success === false) {
+      const err = (json?.error ?? {}) as Record<string, unknown>;
+      const msg = String(err.message ?? json?.message ?? json?.detail ?? `HTTP ${res.status}`);
+      const code = String(err.code ?? "");
+      const details = { status: res.status, path, code };
+      if (res.status === 401) throw new ProviderError("NOT_CONFIGURED", `FastDonate: login/parol noto'g'ri yoki sessiya tugagan (${msg})`, details);
+      if (/balan|insufficient|mablag|yetarli/i.test(`${code} ${msg}`)) throw new ProviderError("INSUFFICIENT_BALANCE", `FastDonate balansi yetarli emas: ${msg}`, details);
+      if (path.startsWith("/merchant/buy")) throw new ProviderError("ORDER_FAILED", `FastDonate buyurtmani rad etdi: ${msg}`, details);
+      throw new ProviderError("PROVIDER_ERROR", `FastDonate: ${msg}`, details);
     }
-    return data as T;
+    const data = json && typeof json === "object" && "data" in json ? json.data : json;
+    return { data, body: json };
   }
+}
 
-  /**
-   * INTEGRATSIYA NUQTASI: autentifikatsiya headerlari.
-   * Hujjat kelmaguncha hech qanday header taxmin qilinmaydi.
-   */
-  protected authHeaders(_creds: FastDonateCredentials, _payload: string): Record<string, string> {
-    throw this.notImplemented("authHeaders");
-  }
-
-  /** INTEGRATSIYA NUQTASI: provider xato javoblarini moslash. */
-  protected mapError(status: number, data: unknown, path: string): ProviderError {
-    if (status === 401 || status === 403) {
-      return new ProviderError("NOT_CONFIGURED", "FastDonate API key noto'g'ri yoki ruxsat yo'q", { status, path });
-    }
-    if (status === 404) {
-      return new ProviderError("PROVIDER_ERROR", "FastDonate endpoint topilmadi", { status, path });
-    }
-    if (status === 408 || status === 504) {
-      return new ProviderError("TIMEOUT", "FastDonate timeout", { status, path });
-    }
-    return new ProviderError("PROVIDER_ERROR", `FastDonate HTTP ${status}`, {
-      status,
-      path,
-      response: data as Record<string, unknown>,
-    });
-  }
-
-  private async credentials(): Promise<FastDonateCredentials> {
-    const creds = await getFastDonateCredentials();
-    if (!creds.apiUrl || !creds.apiKey) {
-      throw new ProviderError(
-        "NOT_CONFIGURED",
-        "FastDonate API URL yoki API Key kiritilmagan (admin panel → FastDonate yoki functions/.env)",
-      );
-    }
-    return creds;
-  }
-
-  private notImplemented(method: string): ProviderError {
-    return new ProviderError(
-      "NOT_IMPLEMENTED",
-      `FastDonate API hujjati hali integratsiya qilinmagan (${method}). MOCK_MODE=true qiling yoki FastDonateService ni to'ldiring.`,
-      { method },
-    );
-  }
+/** FastDonate vaqti zonasiz bo'lishi mumkin — UTC va Toshkent (UTC+5) sifatida ham tekshiriladi */
+function createdAfter(createdAt: string | undefined, buyAt: number): boolean {
+  if (!createdAt) return false;
+  const slack = 3 * 60_000;
+  const asIs = Date.parse(createdAt);
+  const hasTz = /[zZ]|[+-]\d\d:?\d\d$/.test(createdAt);
+  const candidates = hasTz ? [asIs] : [Date.parse(createdAt + "Z"), Date.parse(createdAt + "+05:00")];
+  return candidates.some((t) => Number.isFinite(t) && t >= buyAt - slack && t <= buyAt + ORDER_WAIT_MS + slack);
 }

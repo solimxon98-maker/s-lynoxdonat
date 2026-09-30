@@ -316,7 +316,7 @@ function ProductForm({ initial, id, onClose, onSaved }: { initial: FormState; id
           </div>
           <div className="sm:col-span-2">
             <label className="label">FastDonate SKU (ixtiyoriy)</label>
-            <input className="input" value={f.providerSku} onChange={set("providerSku")} placeholder="API hujjati kelgach to‘ldiriladi" maxLength={120} />
+            <input className="input" value={f.providerSku} onChange={set("providerSku")} placeholder="FastDonate paket ID: 5 yoki 6x2" maxLength={120} />
           </div>
           <label className="flex cursor-pointer items-center gap-3 sm:col-span-2">
             <input type="checkbox" className="h-5 w-5 accent-fuchsia-400" checked={f.oncePerAccount} onChange={set("oncePerAccount")} />
