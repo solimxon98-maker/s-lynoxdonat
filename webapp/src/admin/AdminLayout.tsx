@@ -1,4 +1,5 @@
 import { Cable, CreditCard, Gem, LayoutDashboard, LogOut, Package, Receipt, Users } from "lucide-react";
+import { DialogHost } from "../components/Dialog";
 import { Suspense, useEffect, useState } from "react";
 import { Navigate, NavLink, Outlet } from "react-router-dom";
 import { Logo } from "../components/Logo";
@@ -120,6 +121,7 @@ export function AdminLayout() {
           <main className="px-4 py-6 lg:px-8 lg:py-8">
             <Suspense fallback={<Spinner className="text-neon-blue" />}>
               <Outlet />
+              <DialogHost />
             </Suspense>
           </main>
         </div>

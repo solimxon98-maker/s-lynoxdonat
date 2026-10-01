@@ -1,4 +1,5 @@
 import { Ban, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { dialog } from "../components/Dialog";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, PageHeader, Spinner } from "../components/ui";
 import { api, errorMessage } from "../lib/api";
@@ -57,7 +58,7 @@ export function AdminUsersPage() {
         : cur === tier
           ? `${label} ga ${TIER_META[tier].label} yana 7 kunga uzaytirilsinmi?`
           : `${label} ga ${TIER_META[tier].label} narx 7 kunga berilsinmi?`;
-    if (!window.confirm(msg)) return;
+    if (!await dialog.confirm(msg)) return;
     setBusy(u.id);
     try {
       const r = await api<{ tier: Tier; tierUntil: number | null }>(`/admin/users/${encodeURIComponent(u.id)}/tier`, {
@@ -71,7 +72,7 @@ export function AdminUsersPage() {
           ) ?? null,
       );
     } catch (e) {
-      window.alert(errorMessage(e));
+      void dialog.alert(errorMessage(e));
     } finally {
       setBusy(null);
     }
@@ -79,18 +80,18 @@ export function AdminUsersPage() {
 
   async function changeBalance(u: UserRecord) {
     const label = u.username ? `@${u.username}` : u.firstName;
-    const raw = window.prompt(`${label} balansi: ${formatSum(u.balance ?? 0)}\n\nQancha qo‘shish kerak? (ayirish uchun minus: -5000)`, "");
+    const raw = await dialog.prompt(`${label} balansi: ${formatSum(u.balance ?? 0)}\n\nQancha qo‘shish kerak? (ayirish uchun minus: -5000)`, "");
     if (raw === null) return;
     const delta = Number(raw.replace(/[\s,]/g, ""));
-    if (!Number.isInteger(delta) || delta === 0) return void window.alert("Butun son kiriting, masalan 10000 yoki -5000");
-    const note = window.prompt("Sabab (izoh) — mijozga ham ko‘rsatiladi:", delta > 0 ? "Bonus" : "Tuzatish");
+    if (!Number.isInteger(delta) || delta === 0) return void void dialog.alert("Butun son kiriting, masalan 10000 yoki -5000");
+    const note = await dialog.prompt("Sabab (izoh) — mijozga ham ko‘rsatiladi:", delta > 0 ? "Bonus" : "Tuzatish");
     if (!note?.trim()) return;
     setBusy(u.id);
     try {
       const r = await api<{ balance: number }>(`/admin/users/${encodeURIComponent(u.id)}/balance`, { body: { delta, note }, admin: true });
       setUsers((list) => list?.map((x) => (x.id === u.id ? { ...x, balance: r.balance } : x)) ?? null);
     } catch (e) {
-      window.alert(errorMessage(e));
+      void dialog.alert(errorMessage(e));
     } finally {
       setBusy(null);
     }
@@ -99,13 +100,13 @@ export function AdminUsersPage() {
   async function toggleBlock(u: UserRecord) {
     const next = !u.blocked;
     const label = u.username ? `@${u.username}` : u.firstName;
-    if (!window.confirm(next ? `${label} ni bloklaysizmi?` : `${label} ni blokdan chiqarasizmi?`)) return;
+    if (!await dialog.confirm(next ? `${label} ni bloklaysizmi?` : `${label} ni blokdan chiqarasizmi?`)) return;
     setBusy(u.id);
     try {
       await setUserBlocked(u.id, next);
       setUsers((list) => list?.map((x) => (x.id === u.id ? { ...x, blocked: next } : x)) ?? null);
     } catch (e) {
-      window.alert(errorMessage(e));
+      void dialog.alert(errorMessage(e));
     } finally {
       setBusy(null);
     }

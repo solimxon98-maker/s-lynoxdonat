@@ -1,4 +1,5 @@
 import { CheckCheck, RefreshCw, RotateCcw, Search } from "lucide-react";
+import { dialog } from "../components/Dialog";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, OrderStatusBadge, PageHeader, PaymentStatusBadge, Spinner } from "../components/ui";
 import { api, errorMessage } from "../lib/api";
@@ -110,13 +111,13 @@ export function AdminOrdersPage() {
         : action === "refund"
           ? `#${o.orderNo} — ${formatSum(o.amount)} mijoz balansiga qaytarilsinmi? (Buyurtma yopiladi, qayta yuborib bo‘lmaydi)`
           : `#${o.orderNo} ni qo‘lda "muvaffaqiyatli" deb belgilaysizmi? (Diamond qo‘lda yuborilgan bo‘lsa)`;
-    if (!window.confirm(msg)) return;
+    if (!await dialog.confirm(msg)) return;
     setActionBusy(o.id);
     try {
       await api(`/admin/orders/${encodeURIComponent(o.id)}/${action}`, { body: {}, admin: true });
       await load();
     } catch (e) {
-      window.alert(errorMessage(e));
+      void dialog.alert(errorMessage(e));
     } finally {
       setActionBusy(null);
     }

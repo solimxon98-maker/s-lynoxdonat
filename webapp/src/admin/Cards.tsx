@@ -1,4 +1,5 @@
 import { CreditCard, Pencil, Plus, Trash2 } from "lucide-react";
+import { dialog } from "../components/Dialog";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, PageHeader, Spinner } from "../components/ui";
 import { errorMessage } from "../lib/api";
@@ -59,17 +60,17 @@ export function CardsPage() {
       await updateCard(c.id, { bank: c.bank, number: c.number, holder: c.holder, note: c.note, active: !c.active, sortOrder: c.sortOrder ?? 0 });
       await load();
     } catch (e) {
-      window.alert(errorMessage(e));
+      void dialog.alert(errorMessage(e));
     }
   }
 
   async function remove(c: PaymentCard) {
-    if (!window.confirm(`${c.bankLabel} •••• ${c.number.slice(-4)} o‘chirilsinmi? (Eski so‘rovlarda karta ma'lumoti saqlanib qoladi)`)) return;
+    if (!await dialog.confirm(`${c.bankLabel} •••• ${c.number.slice(-4)} o‘chirilsinmi? (Eski so‘rovlarda karta ma'lumoti saqlanib qoladi)`)) return;
     try {
       await deleteCard(c.id);
       await load();
     } catch (e) {
-      window.alert(errorMessage(e));
+      void dialog.alert(errorMessage(e));
     }
   }
 

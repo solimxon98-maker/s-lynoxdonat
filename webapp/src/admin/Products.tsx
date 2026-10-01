@@ -1,4 +1,5 @@
 import { Pencil, Plus, Power, Trash2, X } from "lucide-react";
+import { dialog } from "../components/Dialog";
 import { useCallback, useEffect, useState, type ButtonHTMLAttributes, type ChangeEvent, type FormEvent } from "react";
 import { Alert, EmptyState, PageHeader, Spinner } from "../components/ui";
 import { errorMessage } from "../lib/api";
@@ -84,7 +85,7 @@ export function ProductsPage() {
   }
 
   async function remove(p: Product) {
-    if (!window.confirm(`"${p.name}" paketini o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi.`)) return;
+    if (!await dialog.confirm(`"${p.name}" paketini o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi.`)) return;
     setBusyId(p.id);
     setError(null);
     try {

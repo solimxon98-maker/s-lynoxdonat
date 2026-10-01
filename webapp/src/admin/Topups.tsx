@@ -1,4 +1,5 @@
 import { Check, Image as ImageIcon, RefreshCw, X } from "lucide-react";
+import { dialog } from "../components/Dialog";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, PageHeader, Spinner } from "../components/ui";
 import { api, errorMessage } from "../lib/api";
@@ -47,33 +48,33 @@ export function TopupsPage() {
   }
 
   async function approve(t: TopupRecord) {
-    const raw = window.prompt(
+    const raw = await dialog.prompt(
       `#${t.topupNo} — ${label(t)}\nSo‘rov: ${formatSum(t.amount)}\n\nBank ilovangizda tekshiring! Kartaga haqiqatda tushgan summa:`,
       String(t.amount),
     );
     if (raw === null) return;
     const amount = Number(raw.replace(/[\s,.]/g, ""));
-    if (!Number.isInteger(amount) || amount < 1) return void window.alert("Summani raqam bilan kiriting");
+    if (!Number.isInteger(amount) || amount < 1) return void void dialog.alert("Summani raqam bilan kiriting");
     setBusy(t.topupNo);
     try {
       await api(`/admin/topups/${t.topupNo}/approve`, { body: { amount }, admin: true });
       await load();
     } catch (e) {
-      window.alert(errorMessage(e));
+      void dialog.alert(errorMessage(e));
     } finally {
       setBusy(null);
     }
   }
 
   async function reject(t: TopupRecord) {
-    const reason = window.prompt(`#${t.topupNo} rad etilsinmi? Sabab (mijozga yuboriladi):`, "Pul kartaga tushmadi");
+    const reason = await dialog.prompt(`#${t.topupNo} rad etilsinmi? Sabab (mijozga yuboriladi):`, "Pul kartaga tushmadi");
     if (reason === null) return;
     setBusy(t.topupNo);
     try {
       await api(`/admin/topups/${t.topupNo}/reject`, { body: { reason }, admin: true });
       await load();
     } catch (e) {
-      window.alert(errorMessage(e));
+      void dialog.alert(errorMessage(e));
     } finally {
       setBusy(null);
     }
