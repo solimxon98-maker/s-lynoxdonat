@@ -236,6 +236,7 @@ function TestPurchase() {
   const [busy, setBusy] = useState<string | null>(null);
   const [out, setOut] = useState<unknown>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     listProducts()
@@ -261,7 +262,7 @@ function TestPurchase() {
       if (kind === "orders") return setOut(await api("/admin/fastdonate/orders", { admin: true }));
       const p = products.find((x) => x.id === productId);
       if (!p || !nick) return;
-      if (!window.confirm(`HAQIQIY XARID!\n\n${p.name} → ${nick} (${mlbbId} / ${serverId})\nFastDonate balansingizdan pul yechiladi.\n\nDavom etasizmi?`)) return;
+      setConfirming(false);
       setOut(await api("/admin/fastdonate/test-order", { body: { productId, mlbbId, serverId, confirm: true }, admin: true }));
     } catch (e) {
       setErr(errorMessage(e));
@@ -294,7 +295,7 @@ function TestPurchase() {
         ))}
       </select>
       <div className="flex flex-wrap gap-2">
-        <button className="btn-primary" onClick={() => run("buy")} disabled={!!busy || !nick || !productId}>
+        <button className="btn-primary" onClick={() => { setErr(null); setConfirming(true); }} disabled={!!busy || !nick || !productId || confirming}>
           {busy === "buy" ? <Spinner size={16} /> : null} Sinov xaridini qilish
         </button>
         <button className="btn-ghost" onClick={() => run("orders")} disabled={!!busy}>
@@ -304,6 +305,22 @@ function TestPurchase() {
           {busy === "prices" ? <Spinner size={16} /> : null} Mening narxlarim
         </button>
       </div>
+      {confirming && (
+        <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 p-4 text-sm text-amber-100">
+          <p className="font-bold">⚠️ HAQIQIY XARID</p>
+          <p className="mt-1">
+            {products.find((x) => x.id === productId)?.name} → <b>{nick}</b> ({mlbbId} / {serverId}). FastDonate balansingizdan pul yechiladi.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button className="btn-primary px-4 py-2 text-sm" onClick={() => run("buy")} disabled={!!busy}>
+              {busy === "buy" ? <Spinner size={16} /> : null} Ha, sotib olish
+            </button>
+            <button className="btn-ghost px-4 py-2 text-sm" onClick={() => setConfirming(false)} disabled={!!busy}>
+              Bekor
+            </button>
+          </div>
+        </div>
+      )}
       {err && <Alert>{err}</Alert>}
       {out !== null && (
         <pre className="max-h-96 overflow-auto rounded-2xl bg-ink-950/80 p-4 text-[11px] leading-relaxed text-slate-300 ring-1 ring-white/5">
