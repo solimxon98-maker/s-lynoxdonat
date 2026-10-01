@@ -3,7 +3,7 @@ import { dialog } from "../components/Dialog";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, PageHeader, Spinner } from "../components/ui";
 import { api, errorMessage } from "../lib/api";
-import { activeTier, TIER_META } from "../lib/tier";
+import { activeTier, bestTier, TIER_META } from "../lib/tier";
 import type { Tier } from "../lib/types";
 import { listUsers, setUserBlocked } from "../lib/adminData";
 import { formatDate, formatDateTime, formatSum } from "../lib/format";
@@ -97,6 +97,21 @@ export function AdminUsersPage() {
     }
   }
 
+  async function setPermanent(u: UserRecord, tier: Tier) {
+    const label = u.username ? `@${u.username}` : u.firstName;
+    const msg = tier === "oddiy" ? `${label} ning doimiy chegirmasini olib tashlaysizmi?` : `${label} ga DOIMIY (muddatsiz) ${TIER_META[tier].label} narx berilsinmi?`;
+    if (!(await dialog.confirm(msg))) return;
+    setBusy(u.id);
+    try {
+      const r = await api<{ permanentTier: Tier }>(`/admin/users/${encodeURIComponent(u.id)}/permanent`, { body: { tier }, admin: true });
+      setUsers((list) => list?.map((x) => (x.id === u.id ? { ...x, permanentTier: r.permanentTier } : x)) ?? null);
+    } catch (e) {
+      void dialog.alert(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function toggleBlock(u: UserRecord) {
     const next = !u.blocked;
     const label = u.username ? `@${u.username}` : u.firstName;
@@ -175,13 +190,16 @@ export function AdminUsersPage() {
                   </td>
                   <td className="px-4 py-3">
                     {(() => {
-                      const t = activeTier(u.tier, u.tierUntil);
+                      const temp = activeTier(u.tier, u.tierUntil);
+                      const { tier: t, permanent } = bestTier(temp, u.permanentTier);
+                      const perm = u.permanentTier ?? "oddiy";
                       return (
                         <div className="space-y-1.5">
                           <span className={`chip ${TIER_META[t].chip}`}>
-                            {TIER_META[t].emoji} {TIER_META[t].label}
+                            {TIER_META[t].emoji} {TIER_META[t].label}{permanent ? " ♾" : ""}
                           </span>
-                          {t !== "oddiy" && <p className="text-[11px] text-slate-500">{formatDateTime(u.tierUntil)} gacha</p>}
+                          {permanent && <p className="text-[11px] text-slate-500">doimiy</p>}
+                          {temp !== "oddiy" && <p className="text-[11px] text-slate-500">{TIER_META[temp].emoji} {formatDateTime(u.tierUntil)} gacha</p>}
                           <div className="flex gap-1">
                             <button className="whitespace-nowrap rounded-lg border border-orange-400/30 px-2 py-1 text-[11px] text-orange-300 hover:bg-orange-400/10" disabled={busy === u.id} onClick={() => setTier(u, "bronza")}>
                               +🥉 7 kun
@@ -189,9 +207,26 @@ export function AdminUsersPage() {
                             <button className="whitespace-nowrap rounded-lg border border-amber-300/40 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-300/10" disabled={busy === u.id} onClick={() => setTier(u, "vip")}>
                               +👑 7 kun
                             </button>
-                            {t !== "oddiy" && (
+                            {temp !== "oddiy" && (
                               <button className="whitespace-nowrap rounded-lg border border-white/10 px-2 py-1 text-[11px] text-slate-400 hover:bg-white/5" disabled={busy === u.id} onClick={() => setTier(u, "oddiy")}>
                                 Bekor
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            {perm !== "bronza" && (
+                              <button className="whitespace-nowrap rounded-lg border border-orange-400/30 bg-orange-400/5 px-2 py-1 text-[11px] text-orange-300 hover:bg-orange-400/10" disabled={busy === u.id} onClick={() => setPermanent(u, "bronza")}>
+                                ♾ 🥉 doimiy
+                              </button>
+                            )}
+                            {perm !== "vip" && (
+                              <button className="whitespace-nowrap rounded-lg border border-amber-300/40 bg-amber-300/5 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-300/10" disabled={busy === u.id} onClick={() => setPermanent(u, "vip")}>
+                                ♾ 👑 doimiy
+                              </button>
+                            )}
+                            {perm !== "oddiy" && (
+                              <button className="whitespace-nowrap rounded-lg border border-white/10 px-2 py-1 text-[11px] text-slate-400 hover:bg-white/5" disabled={busy === u.id} onClick={() => setPermanent(u, "oddiy")}>
+                                ♾ olib tashlash
                               </button>
                             )}
                           </div>

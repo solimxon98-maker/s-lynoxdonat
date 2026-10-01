@@ -5,7 +5,7 @@
  */
 import { config } from "../_shared/config.ts";
 import { db } from "../_shared/db.ts";
-import { effectiveTier, esc, formatDate, formatDateTime, formatSum, ORDER_STATUS_LABEL, productLabel, TIER_LABEL } from "../_shared/format.ts";
+import { esc, userTier, formatDate, formatDateTime, formatSum, ORDER_STATUS_LABEL, productLabel, TIER_LABEL } from "../_shared/format.ts";
 import { safeEqual } from "../_shared/http.ts";
 import { writeLog } from "../_shared/logger.ts";
 import { type InlineButton, inlineKeyboard, sendMessage, tg } from "../_shared/telegramApi.ts";
@@ -218,7 +218,8 @@ async function sendOrders(chatId: number, user: User) {
 }
 
 function tierLine(u: TgUser): string {
-  const t = effectiveTier(u.tier, u.tier_until);
+  const { tier: t, permanent } = userTier(u);
+  if (permanent) return `🏷 Tarif: <b>${TIER_LABEL[t]}</b> ♾ doimiy`;
   if (t === "oddiy") return "🏷 Tarif: Oddiy\n👥 Botga 5 ta do‘st taklif qiling — 🥉 Bronza, 10 ta — 👑 VIP narx!";
   return `🏷 Tarif: <b>${TIER_LABEL[t]}</b>\n⏳ ${esc(formatDateTime(new Date(u.tier_until!)))} gacha`;
 }
@@ -241,7 +242,7 @@ async function sendProfile(chatId: number, u: User) {
 async function sendInvite(chatId: number, u: User) {
   const link = await referralLink(u.id);
   const cycle = u.referral_cycle;
-  const vip = effectiveTier(u.tier, u.tier_until) === "vip";
+  const vip = userTier(u).tier === "vip";
   const next = cycle < REF_BRONZA_AT && !vip ? REF_BRONZA_AT : REF_VIP_AT;
   const bar = Array.from({ length: REF_VIP_AT }, (_, i) => (i < cycle ? "🟦" : "⬜")).join("");
   const text = [

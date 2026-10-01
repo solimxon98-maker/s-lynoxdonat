@@ -249,7 +249,7 @@ export function DonatePage() {
           <p className="font-display text-sm font-bold text-white">Paketni tanlang</p>
         </div>
 
-        <TierBanner tier={tier} until={profile?.tierUntil ?? null} />
+        <TierBanner tier={tier} until={profile?.tierUntil ?? null} permanent={!!profile?.tierPermanent} />
 
         {productsError && <Alert>Paketlarni yuklab bo‘lmadi: {productsError}</Alert>}
         {!products && !productsError && (
@@ -474,7 +474,7 @@ function ProductCard({ p, tier, index, onClick }: { p: Product; tier: Tier; inde
   );
 }
 
-function TierBanner({ tier, until }: { tier: Tier; until: number | null }) {
+function TierBanner({ tier, until, permanent }: { tier: Tier; until: number | null; permanent: boolean }) {
   if (tier === "oddiy") {
     return (
       <div className="card mb-4 flex items-center gap-3 px-4 py-3 text-xs text-slate-300">
@@ -495,7 +495,7 @@ function TierBanner({ tier, until }: { tier: Tier; until: number | null }) {
       <span className="text-sm font-bold">
         {m.emoji} Sizda {m.label} narxlar
       </span>
-      {until && <span className="text-xs opacity-80">⏳ {formatDateTime(until)} gacha</span>}
+      {permanent ? <span className="text-xs opacity-80">♾ doimiy</span> : until && <span className="text-xs opacity-80">⏳ {formatDateTime(until)} gacha</span>}
     </div>
   );
 }

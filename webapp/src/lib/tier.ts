@@ -22,3 +22,10 @@ export function activeTier(tier: Tier | undefined, untilMs: number | null | unde
   if (!tier || tier === "oddiy") return "oddiy";
   return (untilMs ?? 0) > now ? tier : "oddiy";
 }
+
+const RANK: Record<Tier, number> = { oddiy: 0, bronza: 1, vip: 2 };
+/** Doimiy va vaqtinchalik tarifdan yuqorirog'i */
+export function bestTier(temp: Tier, permanent: Tier | undefined): { tier: Tier; permanent: boolean } {
+  const p = permanent ?? "oddiy";
+  return p !== "oddiy" && RANK[p] >= RANK[temp] ? { tier: p, permanent: true } : { tier: temp, permanent: false };
+}

@@ -52,7 +52,7 @@ export function ProfilePage() {
           {TIER_META[profile.tier ?? "oddiy"].emoji} Tarif: {TIER_META[profile.tier ?? "oddiy"].label}
         </span>
         <span className="text-xs opacity-80">
-          {profile.tier && profile.tier !== "oddiy" && profile.tierUntil ? `⏳ ${formatDateTime(profile.tierUntil)} gacha` : "5 do‘st — Bronza · 10 do‘st — VIP"}
+          {profile.tierPermanent ? "♾ doimiy" : profile.tier && profile.tier !== "oddiy" && profile.tierUntil ? `⏳ ${formatDateTime(profile.tierUntil)} gacha` : "5 do‘st — Bronza · 10 do‘st — VIP"}
         </span>
       </div>
 

@@ -52,3 +52,11 @@ export function formatCardNumber(n: string): string {
 export function cardShort(c: { bank: string; number: string }): string {
   return `${BANK_LABEL[c.bank] ?? "Karta"} •••• ${c.number.slice(-4)}`;
 }
+
+const RANK: Record<Tier, number> = { oddiy: 0, bronza: 1, vip: 2 };
+/** Haqiqiy tarif: doimiy (admin bergan) va vaqtinchalik tarifdan yuqorirog'i */
+export function userTier(u: { tier: Tier; tier_until: string | null; permanent_tier?: Tier | null }): { tier: Tier; permanent: boolean } {
+  const temp = effectiveTier(u.tier, u.tier_until);
+  const perm = (u.permanent_tier ?? "oddiy") as Tier;
+  return RANK[perm] >= RANK[temp] && perm !== "oddiy" ? { tier: perm, permanent: true } : { tier: temp, permanent: false };
+}

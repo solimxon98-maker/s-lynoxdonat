@@ -71,9 +71,15 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const fmt = (n: number) => `${Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ")} so‘m`;
 const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-function effectiveTier(u: any): Tier {
+function tempTier(u: any): Tier {
   if (!u?.tier || u.tier === "oddiy") return "oddiy";
   return (u.tierUntil?.toMillis?.() ?? 0) > Date.now() ? u.tier : "oddiy";
+}
+const RANK: Record<Tier, number> = { oddiy: 0, bronza: 1, vip: 2 };
+function effectiveTier(u: any): Tier {
+  const t = tempTier(u);
+  const p: Tier = u?.permanentTier ?? "oddiy";
+  return RANK[p] >= RANK[t] ? p : t;
 }
 const TIER_LABEL: Record<Tier, string> = { oddiy: "Oddiy", bronza: "🥉 Bronza", vip: "👑 VIP" };
 
@@ -100,7 +106,8 @@ function publicUser(u: any) {
     uid: u.uid, telegramId: u.telegramId, username: u.username, firstName: u.firstName, lastName: u.lastName,
     photoUrl: u.photoUrl ?? null, ordersCount: u.ordersCount ?? 0, successfulOrders: u.successfulOrders ?? 0,
     totalSpent: u.totalSpent ?? 0, createdAt: u.createdAt?.toMillis?.() ?? null,
-    tier: t, tierUntil: t === "oddiy" ? null : u.tierUntil?.toMillis?.() ?? null,
+    tier: t, tierUntil: t === "oddiy" || t === (u.permanentTier ?? "oddiy") ? null : u.tierUntil?.toMillis?.() ?? null,
+    tierPermanent: t !== "oddiy" && t === (u.permanentTier ?? "oddiy"),
     balance: u.balance ?? 0,
   };
 }
@@ -552,6 +559,12 @@ on("POST", /^\/admin\/users\/([^/]+)\/tier$/, async ({ uid, params, body }) => {
     });
   }
   return { tier, tierUntil: until };
+});
+on("POST", /^\/admin\/users\/([^/]+)\/permanent$/, async ({ uid, params, body }) => {
+  requireAdmin(uid);
+  const target = params[0].startsWith("tg_") ? params[0] : `tg_${params[0]}`;
+  demoDb.update("users", target, { permanentTier: body?.tier ?? "oddiy" });
+  return { permanentTier: body?.tier ?? "oddiy" };
 });
 on("POST", /^\/admin\/orders\/([^/]+)\/retry$/, async ({ uid, params }) => {
   requireAdmin(uid);

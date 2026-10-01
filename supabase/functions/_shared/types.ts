@@ -19,6 +19,7 @@ export interface TgUser {
   last_order_at: string | null;
   tier: Tier;
   tier_until: string | null;
+  permanent_tier?: Tier;
   referred_by: number | null;
   referrals_total: number;
   referral_cycle: number;

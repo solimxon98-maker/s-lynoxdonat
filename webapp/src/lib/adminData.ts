@@ -205,6 +205,7 @@ const toUser = (r: Row): UserRecord => ({
   createdAt: t(r.created_at),
   tier: r.tier as UserRecord["tier"],
   tierUntil: t(r.tier_until),
+  permanentTier: (r.permanent_tier as UserRecord["permanentTier"]) ?? "oddiy",
   referralsTotal: Number(r.referrals_total ?? 0),
   referralCycle: Number(r.referral_cycle ?? 0),
   referredBy: r.referred_by ? String(r.referred_by) : null,

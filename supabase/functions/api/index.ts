@@ -8,7 +8,7 @@
  */
 import { config } from "../_shared/config.ts";
 import { db, rpc } from "../_shared/db.ts";
-import { effectiveTier, esc, formatDateTime, TIER_LABEL } from "../_shared/format.ts";
+import { esc, formatDateTime, TIER_LABEL, userTier } from "../_shared/format.ts";
 import {
   badRequest, corsHeaders, errorResponse, forbidden, HttpError, json, notFound, readJson, unauthorized,
 } from "../_shared/http.ts";
@@ -71,7 +71,7 @@ async function requireAdmin(req: Request): Promise<string> {
 }
 
 async function publicUser(u: TgUser) {
-  const tier = effectiveTier(u.tier, u.tier_until);
+  const { tier, permanent } = userTier(u);
   return {
     uid: `tg_${u.id}`,
     telegramId: String(u.id),
@@ -84,7 +84,8 @@ async function publicUser(u: TgUser) {
     totalSpent: Number(u.total_spent),
     createdAt: ms(u.created_at),
     tier,
-    tierUntil: tier === "oddiy" ? null : ms(u.tier_until),
+    tierUntil: tier === "oddiy" || permanent ? null : ms(u.tier_until),
+    tierPermanent: permanent,
     balance: Number(u.balance ?? 0),
     referral: { ...referralProgress(u), link: await referralLink(u.id) },
   };
@@ -333,6 +334,23 @@ on("POST", /^\/admin\/users\/(\d{1,20})\/tier$/, async ({ req, params, body }) =
     ].join("\n"));
   }
   return { tier, tierUntil: ms(until) };
+});
+
+/** Doimiy tarif (muddatsiz). "oddiy" — olib tashlash */
+on("POST", /^\/admin\/users\/(\d{1,20})\/permanent$/, async ({ req, params, body }) => {
+  const adminId = await requireAdmin(req);
+  const userId = Number(params[0]);
+  const tier = body.tier as Tier;
+  if (tier !== "oddiy" && tier !== "bronza" && tier !== "vip") throw badRequest("INVALID_TIER", "Tarif: oddiy | bronza | vip");
+  await rpc("set_permanent_tier", { p_user_id: userId, p_tier: tier });
+  await writeLog("info", "user_permanent_tier_set", { userId, tier, adminId });
+  if (tier !== "oddiy") {
+    await sendMessageSafe(userId, [
+      `${tier === "vip" ? "👑" : "🥉"} <b>Tabriklaymiz! Sizga doimiy ${TIER_LABEL[tier]} narxlar berildi</b>`, "",
+      "♾ Muddatsiz — endi barcha paketlarni har doim arzonroq narxda olasiz.",
+    ].join("\n"));
+  }
+  return { permanentTier: tier };
 });
 
 on("POST", /^\/admin\/orders\/(SLD-\d{6,})\/retry$/, async ({ req, params }) => {

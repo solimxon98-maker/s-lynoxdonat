@@ -25,6 +25,7 @@ export interface Profile {
   referral?: { total: number; cycle: number; bronzaAt: number; vipAt: number; link: string | null };
   tier: Tier;
   tierUntil: number | null;
+  tierPermanent?: boolean;
   balance?: number;
   telegramId: string;
   username: string | null;
@@ -74,6 +75,7 @@ export interface UserRecord {
   referredBy?: string | null;
   tier?: Tier;
   tierUntil?: number | null;
+  permanentTier?: Tier;
   uid: string;
   telegramId: string;
   username: string | null;

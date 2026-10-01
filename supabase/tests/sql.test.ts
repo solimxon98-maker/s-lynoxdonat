@@ -16,7 +16,7 @@ await db.exec(`
   grant usage on schema public to anon, authenticated, service_role;
 `);
 try { await db.exec(fs.readFileSync(`${R}/migrations/20260929000001_init.sql`, "utf8")); } catch (e) { console.error("MIGRATION ERROR:", e.message, "pos", e.position, e.hint ?? ""); const s = fs.readFileSync(`${R}/migrations/20260929000001_init.sql`, "utf8"); if (e.position) console.error(s.slice(Math.max(0, +e.position - 200), +e.position + 100)); process.exit(1); }
-try { await db.exec(fs.readFileSync(`${R}/migrations/20260929000004_wallet.sql`, "utf8")); await db.exec(fs.readFileSync(`${R}/migrations/20260929000006_uzum_card.sql`, "utf8")); } catch (e) { console.error("WALLET MIGRATION ERROR:", e.message); process.exit(1); }
+try { await db.exec(fs.readFileSync(`${R}/migrations/20260929000004_wallet.sql`, "utf8")); await db.exec(fs.readFileSync(`${R}/migrations/20260929000006_uzum_card.sql`, "utf8")); await db.exec(fs.readFileSync(`${R}/migrations/20261001000008_permanent_tier.sql`, "utf8")); } catch (e) { console.error("WALLET MIGRATION ERROR:", e.message); process.exit(1); }
 await db.exec(`grant all on all tables in schema public to service_role; grant all on all sequences in schema public to service_role; grant execute on all functions in schema public to service_role;`);
 await db.exec(fs.readFileSync(`${R}/seed.sql`, "utf8"));
 ok((await one("select count(*)::int c from products")).c === 21, "21 ta paket yuklandi");
@@ -97,6 +97,22 @@ ok((await one("select referred_by from tg_users where id=1003")).referred_by == 
 await db.query("update orders set created_at = now() - interval '25 hours' where status='AWAITING_PAYMENT'");
 ok((await one("select expire_unpaid_orders() r")).r > 0, "24 soatlik to'lanmaganlar bekor qilindi");
 
+
+
+// ---- DOIMIY TARIF ----
+await db.query("select * from upsert_tg_user(800,'p','Perm',null,null,null)");
+const pbuy = async (k) => { const no = (await one("select create_order(800, $1, '888888888', '1', 'N', $2, 'balance', 'm', true)->>'order_no' n", [p86, k])).n; return await one("select amount, price_tier from orders where order_no=$1", [no]); };
+ok((await pbuy("pt1")).amount === 17000, "doimiy tarifsiz — oddiy 17 000");
+await db.query("select set_permanent_tier(800, 'bronza')");
+let pb = await pbuy("pt2");
+ok(pb.amount === 16500 && pb.price_tier === "bronza", "doimiy Bronza — 16 500 (muddatsiz)");
+await db.query("select set_user_tier(800, 'vip', 7)");
+ok((await pbuy("pt3")).amount === 16000, "doimiy Bronza + vaqtinchalik VIP — yuqorirog'i (VIP 16 000)");
+await db.query("update tg_users set tier_until = now() - interval '1 minute' where id=800");
+ok((await pbuy("pt4")).amount === 16500, "VIP muddati tugadi — doimiy Bronza saqlanib qoldi");
+await db.query("select set_permanent_tier(800, 'oddiy')");
+ok((await pbuy("pt5")).amount === 17000, "doimiy tarif olib tashlandi — oddiy narx");
+ok(/INVALID_TIER/.test(await err("select set_permanent_tier(800, 'gold')")), "noto'g'ri tarif rad etiladi");
 
 // ---- BALANS ----
 await db.query("insert into payment_cards(bank, number, holder) values ('humo','9860123412341234','SOLIM X'),('uzcard','8600123412341234','SOLIM X'),('uzum','4916123412341234','SOLIM X')");
