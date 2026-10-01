@@ -1,4 +1,5 @@
 import { config } from "../../config.ts";
+import { db } from "../../db.ts";
 import { type FastDonateCredentials, getFastDonateCredentials } from "../../services/settings.ts";
 import { checkPlayerViaFastDonate } from "./playerCheck.ts";
 import {
@@ -68,27 +69,36 @@ export class FastDonateService implements DonateProvider {
     if (!products.length) {
       throw new ProviderError("INVALID_PRODUCT", `"${input.productName}" paketiga FastDonate kodi berilmagan (admin panel → Paketlar → Provider SKU)`);
     }
+    const count = products.reduce((a, p) => a + p.count, 0);
+    // Javob: { success: true, data: { message: "ok" } } — buyurtma ID qaytmaydi, FastDonate darhol bajaradi.
     const r = await this.buyRaw(products, input.mlbbId, input.serverId);
-    const d = (r.data ?? {}) as Record<string, unknown>;
-    const fdId = d.order_id ?? d.id ?? (d.order as Record<string, unknown> | undefined)?.id ?? null;
-    return {
-      providerOrderId: `FD:${r.at}:${input.mlbbId}:${input.serverId}${fdId ? `:${fdId}` : ""}`,
-      status: "PROCESSING",
-      message: typeof d.message === "string" ? d.message : "FastDonate buyurtmani qabul qildi",
-      raw: r.body ?? undefined,
-    };
+    const base = `FD:${r.at}:${input.mlbbId}:${input.serverId}:${count}`;
+    // Odatda buyurtma tarixida darhol "status 1" bilan paydo bo'ladi
+    for (const wait of [1500, 3000]) {
+      await new Promise((res) => setTimeout(res, wait));
+      const done = await this.checkOrder(base).catch(() => null);
+      if (done?.status === "SUCCESS") return { ...done, raw: r.body ?? undefined };
+    }
+    return { providerOrderId: base, status: "PROCESSING", message: "FastDonate buyurtmani qabul qildi", raw: r.body ?? undefined };
   }
 
+  /**
+   * Holat — /profile/orders dan: shu MLBB ID + server, xariddan keyin yaratilgan, boshqa buyurtmamizga
+   * biriktirilmagan qatorlar. "6x2" kabi paketda FastDonate har bir dona uchun alohida qator yozadi.
+   */
   async checkOrder(providerOrderId: string): Promise<ProviderOrderResult> {
-    const m = /^FD:(\d+):(\d+):(\d+)(?::(.+))?$/.exec(providerOrderId);
+    const m = /^FD:(\d+):(\d+):(\d+)(?::(\d+))?(?::([\d,]+))?$/.exec(providerOrderId);
     if (!m) throw new ProviderError("PROVIDER_ERROR", `Noma'lum FastDonate buyurtma ID: ${providerOrderId}`);
+    if (m[5]) return { providerOrderId, status: "SUCCESS", message: "FastDonate: bajarildi" };
     const at = Number(m[1]);
-    const orders = await this.recentOrders(30);
-    const mine = orders.filter((o) =>
-      String(o.user_id) === m[2] && String(o.server_id) === m[3] && (m[4] ? String(o.id) === m[4] : createdAfter(o.created_at, at))
-    );
-    if (mine.some((o) => Number(o.status) === 1)) {
-      return { providerOrderId, status: "SUCCESS", message: "FastDonate: bajarildi" };
+    const count = Number(m[4] ?? 1);
+    const [orders, claimed] = await Promise.all([this.recentOrders(50), claimedFdIds(providerOrderId)]);
+    const mine = orders
+      .filter((o) => String(o.user_id) === m[2] && String(o.server_id) === m[3] && !claimed.has(String(o.id)) && createdAfter(o.created_at, at))
+      .sort((a, b) => Date.parse(a.created_at ?? "") - Date.parse(b.created_at ?? ""))
+      .slice(0, count);
+    if (mine.length >= count && mine.every((o) => Number(o.status) === 1)) {
+      return { providerOrderId: `FD:${m[1]}:${m[2]}:${m[3]}:${count}:${mine.map((o) => o.id).join(",")}`, status: "SUCCESS", message: "FastDonate: bajarildi" };
     }
     if (Date.now() - at > ORDER_WAIT_MS) {
       return {
@@ -224,9 +234,23 @@ export class FastDonateService implements DonateProvider {
 /** FastDonate vaqti zonasiz bo'lishi mumkin — UTC va Toshkent (UTC+5) sifatida ham tekshiriladi */
 function createdAfter(createdAt: string | undefined, buyAt: number): boolean {
   if (!createdAt) return false;
-  const slack = 3 * 60_000;
+  const slack = 60_000;
   const asIs = Date.parse(createdAt);
   const hasTz = /[zZ]|[+-]\d\d:?\d\d$/.test(createdAt);
   const candidates = hasTz ? [asIs] : [Date.parse(createdAt + "Z"), Date.parse(createdAt + "+05:00")];
   return candidates.some((t) => Number.isFinite(t) && t >= buyAt - slack && t <= buyAt + ORDER_WAIT_MS + slack);
+}
+
+/** Boshqa buyurtmalarimizga allaqachon biriktirilgan FastDonate qatorlari (bitta o'yinchiga ketma-ket xarid bo'lsa adashmaslik uchun) */
+async function claimedFdIds(self: string): Promise<Set<string>> {
+  const since = new Date(Date.now() - 2 * 86400_000).toISOString();
+  const { data } = await db().from("orders").select("provider_order_id").gte("updated_at", since);
+  const out = new Set<string>();
+  for (const r of (data ?? []) as { provider_order_id: string | null }[]) {
+    const v = r.provider_order_id ?? "";
+    if (!v.startsWith("FD:") || v === self) continue;
+    const ids = v.split(":")[5];
+    if (ids) ids.split(",").forEach((x) => out.add(x));
+  }
+  return out;
 }

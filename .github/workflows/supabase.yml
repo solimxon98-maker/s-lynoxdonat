@@ -72,7 +72,7 @@ jobs:
       - name: Maxfiy sozlamalar (Edge secrets)
         run: |
           cat > .secrets.env <<EOT
-          MOCK_MODE=${{ vars.MOCK_MODE || 'true' }}
+          MOCK_MODE=${{ vars.MOCK_MODE || 'false' }}
           SESSION_SECRET=$SESSION_SECRET
           CRON_SECRET=$CRON_SECRET
           ALLOWED_ORIGIN=$ALLOWED_ORIGIN
@@ -83,7 +83,7 @@ jobs:
           WEBAPP_URL=$WEBAPP_URL
           SUPPORT_USERNAME=${{ vars.SUPPORT_USERNAME || 'Solim_9804' }}
           PAYMENT_PROVIDER=${{ vars.PAYMENT_PROVIDER || 'balance' }}
-          LOW_BALANCE_THRESHOLD=${{ vars.LOW_BALANCE_THRESHOLD || '0' }}
+          LOW_BALANCE_THRESHOLD=${{ vars.LOW_BALANCE_THRESHOLD || '20000' }}
           FASTDONATE_API_URL=${{ secrets.FASTDONATE_API_URL }}
           FASTDONATE_API_KEY=${{ secrets.FASTDONATE_API_KEY }}
           FASTDONATE_SECRET=${{ secrets.FASTDONATE_SECRET }}

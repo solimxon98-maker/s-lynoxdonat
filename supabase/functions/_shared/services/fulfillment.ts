@@ -53,7 +53,12 @@ export async function checkProcessingOrder(orderNo: string): Promise<void> {
   if (!o || o.status !== "PROCESSING" || !o.provider_order_id) return;
   try {
     const r = await getDonateProvider().checkOrder(o.provider_order_id);
-    if (r.status === "SUCCESS") await completeOrder(orderNo);
+    if (r.status === "SUCCESS") {
+      if (r.providerOrderId && r.providerOrderId !== o.provider_order_id) {
+        await rpc("set_provider_order", { p_order_no: orderNo, p_provider_order_id: r.providerOrderId });
+      }
+      await completeOrder(orderNo);
+    }
     else if (r.status === "FAILED") await failOrder(orderNo, new ProviderError("ORDER_FAILED", r.message ?? "Provider buyurtmani bajarmadi"));
   } catch (e) {
     // Vaqtinchalik xato buyurtmani FAILED qilmaydi — keyingi tekshiruvda qayta uriniladi
